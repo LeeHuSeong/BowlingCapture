@@ -11,11 +11,11 @@ if gpus:
     try:
         for gpu in gpus:
             tf.config.experimental.set_memory_growth(gpu, True)
-        print(f"✅ GPU 사용 설정 완료: {len(gpus)}개 GPU 감지됨")
+        print(f"GPU 사용 설정 완료: {len(gpus)}개 GPU 감지됨")
     except RuntimeError as e:
-        print(f"⚠️ GPU 설정 중 오류 발생: {e}")
+        print(f"GPU 설정 중 오류 발생: {e}")
 else:
-    print("❌ GPU 사용 불가. CPU로 실행됩니다.")
+    print("GPU 사용 불가. CPU로 실행됩니다.")
 
 
 def load_movenet_model():
