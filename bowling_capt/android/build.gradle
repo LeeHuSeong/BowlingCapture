@@ -3,6 +3,17 @@ allprojects {
         google()
         mavenCentral()
     }
+
+    //추가됨
+    subprojects {
+        afterEvaluate { project ->
+            if (project.hasProperty("android")) {
+                project.android.compileOptions.sourceCompatibility = JavaVersion.VERSION_11
+                project.android.compileOptions.targetCompatibility = JavaVersion.VERSION_11
+            }
+        }
+    }
+
 }
 
 rootProject.buildDir = '../build'
