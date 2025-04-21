@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
 import os
 from MoveNet import extract_keypoints_from_video
+from flask import send_from_directory
 
 app = Flask(__name__)
 
@@ -29,6 +30,15 @@ def extract_pose():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+
+@app.route('/get_comparison_video', methods=['GET'])
+def get_comparison_video():
+    video_path = os.path.join(os.getcwd(), 'comparison.mp4')
+    if os.path.exists(video_path):
+        return send_from_directory(directory=os.getcwd(), path='comparison.mp4', as_attachment=False)
+    return jsonify({'error': 'Comparison video not found'}), 404
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
