@@ -5,6 +5,7 @@ import '../services/dtw_service.dart';
 import '../services/lstm_service.dart';
 import '../widgets/result_display.dart';
 import '../models/analysis_result.dart';
+import 'package:http/http.dart' as http;
 
 class HomeScreen extends StatefulWidget {
   final String style;
@@ -32,32 +33,53 @@ class _HomeScreenState extends State<HomeScreen> {
     _result = null;
   });
 
-  String? path;
+  late String path;
 
-  if (widget.source == 'upload') {
-    path = await VideoService.pickVideo();
-  } else if (widget.source == 'camera') {
-    path = await VideoService.captureVideo();
-  }
+  final selectedPath = widget.source == 'upload'
+      ? await VideoService.pickVideo()
+      : await VideoService.captureVideo();
 
-  if (path == null) {
+  if (selectedPath == null) {
     setState(() => _isProcessing = false);
     return;
   }
 
-  final keypoints = await MoveNetService.processVideo(path);
-  final dtwScore = await DTWService.compareWithReference(keypoints);
-  final feedback = await LSTMService.predictFeedback(keypoints);
+  path = selectedPath;
 
-  setState(() {
-    _result = AnalysisResult(
-      videoPath: path!,
-      dtwScore: dtwScore,
-      feedback: feedback,
-    );
-    _isProcessing = false;
-  });
+
+  try {
+    // 1. 서버에 영상 업로드
+    final uri = Uri.parse('http://127.0.0.1:5000/extract_pose');
+    final request = http.MultipartRequest('POST', uri);
+    request.files.add(await http.MultipartFile.fromPath('video', path));
+
+    final response = await request.send();
+    final responseBody = await response.stream.bytesToString();
+    print('서버 응답: $responseBody');
+
+    if (response.statusCode != 200) {
+      throw Exception('서버 오류: $responseBody');
+    }
+
+    // 2. 기존 로직 (예: keypoints -> DTW -> LSTM)
+    final keypoints = await MoveNetService.processVideo(path);
+    final dtwScore = await DTWService.compareWithReference(keypoints);
+    final feedback = await LSTMService.predictFeedback(keypoints);
+
+    setState(() {
+      _result = AnalysisResult(
+        videoPath: path,
+        dtwScore: dtwScore,
+        feedback: feedback,
+      );
+      _isProcessing = false;
+    });
+  } catch (e) {
+    print('에러 발생: $e');
+    setState(() => _isProcessing = false);
+  }
 }
+
 
   @override
   Widget build(BuildContext context) {
