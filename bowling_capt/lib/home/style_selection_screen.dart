@@ -25,24 +25,29 @@ class StyleSelectionScreen extends StatelessWidget {
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            const SizedBox(height: 30),
             const Text(
               '당신의 스타일을 선택하세요!',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 30),
-            ...styles.map((style) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: ElevatedButton(
+            Expanded(
+              child: GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 20,
+                mainAxisSpacing: 20,
+                children: styles.map((style) {
+                  return ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      minimumSize: const Size.fromHeight(50),
+                      padding: const EdgeInsets.all(16),
                     ),
                     onPressed: () => _navigateToNext(context, style),
                     child: Text(style, style: const TextStyle(fontSize: 18)),
-                  ),
-                )),
+                  );
+                }).toList(),
+              ),
+            ),
           ],
         ),
       ),
