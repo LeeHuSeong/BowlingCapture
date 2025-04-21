@@ -1,5 +1,6 @@
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
 class VideoService {
@@ -29,4 +30,22 @@ class VideoService {
       return false;
     }
   }
+
+   static Future<File?> downloadComparisonVideo() async {
+    final url = 'http://192.168.35.231:5000/get_comparison_video'; // 실제 서버 주소로 교체 필요
+
+  try {
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/comparison.mp4');
+      await file.writeAsBytes(response.bodyBytes);
+      return file;
+    }
+  } catch (e) {
+    print('영상 다운로드 실패: $e');
+  }
+
+  return null;
+}
 }

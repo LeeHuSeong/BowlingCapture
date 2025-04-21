@@ -9,9 +9,15 @@ import 'package:http/http.dart' as http;
 
 class HomeScreen extends StatefulWidget {
   final String style;
-  final String source; // 'upload' or 'camera'
+  final String source;
+  final String? editedVideoPath; 
 
-  const HomeScreen({super.key, required this.style, required this.source});
+  const HomeScreen({
+    super.key,
+    required this.style,
+    required this.source,
+    this.editedVideoPath, 
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -35,20 +41,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   late String path;
 
-  final selectedPath = widget.source == 'upload'
-      ? await VideoService.pickVideo()
-      : await VideoService.captureVideo();
+  if (widget.editedVideoPath != null) {
+    path = widget.editedVideoPath!;
+  } else {
+    final selectedPath = widget.source == 'upload'
+        ? await VideoService.pickVideo()
+        : await VideoService.captureVideo();
 
-  if (selectedPath == null) {
-    setState(() => _isProcessing = false);
-    return;
+    if (selectedPath == null) {
+      setState(() => _isProcessing = false);
+      return;
+    }
+
+    path = selectedPath;
   }
 
-  path = selectedPath;
-
-
   try {
-    // 1. 서버에 영상 업로드
     final uri = Uri.parse('http://127.0.0.1:5000/extract_pose');
     final request = http.MultipartRequest('POST', uri);
     request.files.add(await http.MultipartFile.fromPath('video', path));
@@ -61,7 +69,6 @@ class _HomeScreenState extends State<HomeScreen> {
       throw Exception('서버 오류: $responseBody');
     }
 
-    // 2. 기존 로직 (예: keypoints -> DTW -> LSTM)
     final keypoints = await MoveNetService.processVideo(path);
     final dtwScore = await DTWService.compareWithReference(keypoints);
     final feedback = await LSTMService.predictFeedback(keypoints);
@@ -79,7 +86,6 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isProcessing = false);
   }
 }
-
 
   @override
   Widget build(BuildContext context) {
