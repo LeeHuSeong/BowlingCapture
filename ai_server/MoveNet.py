@@ -41,17 +41,29 @@ def extract_keypoints_from_video(video_path, output_folder):
         return None
 
     all_keypoints = []
+    frame_count = 0
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
+        frame_count += 1
+        if frame_count % 10 == 0:
+            print(f"📸 {video_name} 프레임 {frame_count} 처리 중...")
+
         image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         image_tensor = tf.convert_to_tensor(image_rgb)
-        keypoints = detect_pose(image_tensor)
-        all_keypoints.append(keypoints)
+        try:
+            keypoints = detect_pose(image_tensor)
+            all_keypoints.append(keypoints)
+        except Exception as e:
+            print(f"⚠️ 키포인트 추출 오류 (프레임 {frame_count}): {e}")
 
     cap.release()
-    print(f"🔍 {video_name} → 프레임 수: {len(all_keypoints)}")
+
+    if len(all_keypoints) == 0:
+        print(f"❌ {video_name} 처리 실패: 키포인트 없음")
+        return None
+
     all_keypoints = np.array(all_keypoints)
     np.save(output_path, all_keypoints)
     print(f"✅ 저장 완료: {output_path} (shape: {all_keypoints.shape})")
