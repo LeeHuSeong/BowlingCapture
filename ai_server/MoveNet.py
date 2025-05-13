@@ -67,4 +67,10 @@ def extract_keypoints_from_video(video_path, output_folder):
     all_keypoints = np.array(all_keypoints)
     np.save(output_path, all_keypoints)
     print(f"✅ 저장 완료: {output_path} (shape: {all_keypoints.shape})")
+
+    if os.path.exists(output_path):
+        print(f"✅ .npy 파일 저장 확인: {output_path}")
+    else:
+        print(f"❌ .npy 파일 저장 실패: {output_path}")
+
     return output_path
