@@ -1,3 +1,4 @@
+#DTW.py
 import numpy as np
 import cv2
 from scipy.spatial.distance import euclidean
@@ -14,10 +15,10 @@ def compare_poses(reference_path, test_path):
     # DTW 거리 계산용 flatten
     ref_seq = [kp[:, :2].flatten() for kp in ref]
     test_seq = [kp[:, :2].flatten() for kp in test]
-
+    
     distance, path = fastdtw(ref_seq, test_seq, dist=euclidean)
     print(f"DTW 거리: {distance:.2f}")
-    return distance, ref, test
+    return distance, ref, test, path
 
 def visualize_keypoint_diff(ref, test, save_path='comparison.mp4', threshold=0.1):
     height, width = 256, 256
@@ -38,6 +39,15 @@ def visualize_keypoint_diff(ref, test, save_path='comparison.mp4', threshold=0.1
 
     out.release()
     print(f"시각화 저장 완료: {save_path}")
+
+def compute_diff_sequence(ref, test, path):
+    # ref, test: (frames, 17, 3)
+    ref_seq = [r[:, :2].flatten() for r in ref]
+    test_seq = [t[:, :2].flatten() for t in test]
+
+    diff_seq = [test_seq[j] - ref_seq[i] for i, j in path]  # (N, 34)
+    return np.array(diff_seq)
+
 
 if __name__ == "__main__":
     reference_file = os.path.join("AI", "output", "Pro_Player.npy")

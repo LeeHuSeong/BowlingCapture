@@ -1,7 +1,21 @@
+#LSTM.py
 import os
 import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+def predict_feedback(diff_seq, model_path="lstm_model.h5"):
+    model = load_model(model_path)
+
+    padded = pad_sequences([diff_seq], padding='post', dtype='float32')
+    pred = model.predict(padded)
+
+    # 예시 분류라면 → label decoding
+    label_map = {0: "좋습니다!", 1: "왼팔이 너무 일찍 펴졌어요", 2: "무릎 굽힘이 부족해요"}
+    predicted_label = np.argmax(pred)
+    return label_map.get(predicted_label, "분석 결과를 해석할 수 없습니다.")
 
 # 데이터 로드
 def load_dataset(keypoint_dir):
