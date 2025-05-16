@@ -12,19 +12,12 @@ if (localPropertiesFile.exists()) {
     }
 }
 
-def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-if (flutterVersionCode == null) {
-    flutterVersionCode = '1'
-}
-
-def flutterVersionName = localProperties.getProperty('flutter.versionName')
-if (flutterVersionName == null) {
-    flutterVersionName = '1.0'
-}
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '1'
+def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0'
 
 android {
     namespace "com.example.bowling_capt"
-    compileSdk 34             // flutter.compileSdkVersion 대신 33을 직접 지정
+    compileSdk 34
     ndkVersion flutter.ndkVersion
 
     compileOptions {
@@ -41,14 +34,12 @@ android {
     }
 
     defaultConfig {
-        defaultConfig {
         applicationId "com.example.bowling_capt"
         minSdkVersion 21
         targetSdkVersion 34
         multiDexEnabled true
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
-        }
     }
 
     buildTypes {
@@ -56,14 +47,13 @@ android {
             signingConfig signingConfigs.debug
         }
     }
-
-    buildscript {
-    dependencies {
-        classpath 'com.android.tools.build:gradle:8.2.1'
+}
+configurations.all {
+    resolutionStrategy {
+        force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+        force 'androidx.annotation:annotation-jvm:1.6.0'
     }
 }
-}
-
 flutter {
     source '../..'
 }

@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
-import 'package:video_trimmer/video_trimmer.dart';
-import 'home_screen.dart';
 import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
+import 'home_screen.dart';
 
 class VideoEditorScreen extends StatefulWidget {
   final String path;
@@ -14,74 +14,77 @@ class VideoEditorScreen extends StatefulWidget {
 }
 
 class _VideoEditorScreenState extends State<VideoEditorScreen> {
-  final Trimmer _trimmer = Trimmer();
-  double _startValue = 0.0;
-  double _endValue = 0.0;
-  bool _isSaving = false;
-  bool _isPlaying = false;
+  late VideoPlayerController _controller;
+  double _start = 0.0;
+  double _end = 0.0;
+  double _max = 0.0;
 
   @override
   void initState() {
     super.initState();
-    _loadVideo();
+    _controller = VideoPlayerController.file(File(widget.path))
+      ..initialize().then((_) {
+        setState(() {
+          _max = _controller.value.duration.inSeconds.toDouble();
+          _end = _max;
+        });
+      });
   }
 
-  Future<void> _loadVideo() async {
-    await _trimmer.loadVideo(videoFile: File(widget.path));
-    setState(() {});
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
-  Future<void> _saveTrimmedVideo() async {
-    setState(() => _isSaving = true);
-
-    await _trimmer.saveTrimmedVideo(
-      startValue: _startValue,
-      endValue: _endValue,
-      onSave: (outputPath) {
-        setState(() => _isSaving = false);
-
-        if (outputPath != null) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => HomeScreen(
-                style: widget.style,
-                source: 'upload',
-                editedVideoPath: outputPath, // 자른 영상 경로 전달
-              ),
-            ),
-          );
-        }
-      },
+  void _proceed() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => HomeScreen(
+          style: widget.style,
+          source: 'upload',
+          editedVideoPath: widget.path,
+          startTime: _start,
+          endTime: _end,
+        ),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('영상 자르기')),
-      body: _isSaving
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                Expanded(child: VideoViewer(trimmer: _trimmer)),
-                TrimViewer(
-                  trimmer: _trimmer,
-                  viewerHeight: 50.0,
-                  viewerWidth: MediaQuery.of(context).size.width,
-                  maxVideoLength: const Duration(seconds: 8),
-                  onChangeStart: (value) => _startValue = value,
-                  onChangeEnd: (value) => _endValue = value,
-                  onChangePlaybackState: (isPlaying) {
-                    setState(() => _isPlaying = isPlaying);
-                  },
-                ),
-                ElevatedButton(
-                  onPressed: _saveTrimmedVideo,
-                  child: const Text("자른 영상으로 분석 시작"),
-                ),
-              ],
+      appBar: AppBar(title: const Text('영상 구간 선택')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            if (_controller.value.isInitialized)
+              AspectRatio(
+                aspectRatio: _controller.value.aspectRatio,
+                child: VideoPlayer(_controller),
+              ),
+            const SizedBox(height: 16),
+            Text("시작: ${_start.toStringAsFixed(1)}초  /  끝: ${_end.toStringAsFixed(1)}초"),
+            RangeSlider(
+              min: 0,
+              max: _max,
+              values: RangeValues(_start, _end),
+              onChanged: (values) {
+                setState(() {
+                  _start = values.start;
+                  _end = values.end;
+                });
+              },
             ),
+            ElevatedButton(
+              onPressed: _proceed,
+              child: const Text("선택한 구간 업로드"),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

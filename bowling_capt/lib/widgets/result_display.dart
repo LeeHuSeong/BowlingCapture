@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:io';
 import '../models/analysis_result.dart';
 import 'comparison_video_player.dart';
 
@@ -10,7 +9,8 @@ class ResultDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final videoFile = File(result.videoPath); // 추가된 부분
+    final serverIp = "http://192.168.35.231"; // 또는 실제 서버 주소
+    final videoUrl = "$serverIp/video/${result.comparisonVideoFileName}";
 
     return Column(
       children: [
@@ -20,7 +20,7 @@ class ResultDisplay extends StatelessWidget {
         Text('피드백: ${result.feedback}',
             style: const TextStyle(fontSize: 16)),
         const SizedBox(height: 20),
-        ComparisonVideoPlayer(videoFile: videoFile),
+        ComparisonVideoPlayer(videoUrl: videoUrl),
       ],
     );
   }

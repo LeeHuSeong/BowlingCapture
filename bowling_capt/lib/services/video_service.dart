@@ -5,13 +5,15 @@ import 'dart:io';
 
 class VideoService {
   static Future<String?> pickVideo() async {
-    final result = await ImagePicker().pickVideo(source: ImageSource.gallery);
-    return result?.path;
+    final picker = ImagePicker();
+    final file = await picker.pickVideo(source: ImageSource.gallery);
+    return file?.path;
   }
 
-  static Future<String?> captureVideo() async {
-    final result = await ImagePicker().pickVideo(source: ImageSource.camera);
-    return result?.path;
+ static Future<String?> captureVideo() async {
+    final picker = ImagePicker();
+    final file = await picker.pickVideo(source: ImageSource.camera);
+    return file?.path;
   }
 
   static Future<bool> uploadVideoToServer(String filePath) async {

@@ -1,11 +1,10 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 class ComparisonVideoPlayer extends StatefulWidget {
-  final File videoFile;
+  final String videoUrl;
 
-  const ComparisonVideoPlayer({super.key, required this.videoFile});
+  const ComparisonVideoPlayer({required this.videoUrl, super.key});
 
   @override
   State<ComparisonVideoPlayer> createState() => _ComparisonVideoPlayerState();
@@ -17,10 +16,9 @@ class _ComparisonVideoPlayerState extends State<ComparisonVideoPlayer> {
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.file(widget.videoFile)
+    _controller = VideoPlayerController.network(widget.videoUrl)
       ..initialize().then((_) {
         setState(() {});
-        _controller.play();
       });
   }
 
@@ -30,13 +28,28 @@ class _ComparisonVideoPlayerState extends State<ComparisonVideoPlayer> {
     super.dispose();
   }
 
+  void _togglePlayPause() {
+    setState(() {
+      _controller.value.isPlaying ? _controller.pause() : _controller.play();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return _controller.value.isInitialized
-        ? AspectRatio(
+    return Column(
+      children: [
+        if (_controller.value.isInitialized)
+          AspectRatio(
             aspectRatio: _controller.value.aspectRatio,
             child: VideoPlayer(_controller),
-          )
-        : const CircularProgressIndicator();
+          ),
+        VideoProgressIndicator(_controller, allowScrubbing: true),
+        IconButton(
+          icon: Icon(
+              _controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
+          onPressed: _togglePlayPause,
+        ),
+      ],
+    );
   }
 }
