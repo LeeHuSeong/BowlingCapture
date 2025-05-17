@@ -86,14 +86,10 @@ class _HomeScreenState extends State<HomeScreen> {
       final json = jsonDecode(analyzeResponse.body);
 
       setState(() {
-        _result = AnalysisResult(
-          videoPath: path,
-          dtwScore: json['distance'],
-          feedback: json['feedback'],
-          comparisonVideoFileName: json['comparison_video'],
-        );
+        _result = AnalysisResult.fromJson(json).copyWith(videoPath: path);
         _isProcessing = false;
       });
+
     } catch (e) {
       print('에러 발생: $e');
       setState(() => _isProcessing = false);
@@ -110,7 +106,14 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: _isProcessing
-              ? const CircularProgressIndicator()
+              ? const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('분석중입니다...', style: TextStyle(fontSize: 16)),
+                  ],
+                )
               : _result != null
                   ? ResultDisplay(result: _result!)
                   : const Text('분석에 실패했습니다.'),

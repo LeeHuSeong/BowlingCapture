@@ -1,14 +1,20 @@
 #main.py
-from flask import Flask, request, jsonify
+# 표준 라이브러리
 import os
 import uuid
+
+# 외부 라이브러리
 import numpy as np
-from MoveNet import extract_keypoints_from_video
-from DTW import compare_poses, compute_diff_sequence, visualize_keypoint_diff
+import cv2
+from flask import Flask, request, jsonify, send_from_directory
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-from flask import send_from_directory
-import cv2
+
+# 사용자 정의 모듈
+from DTW import compare_poses, compute_diff_sequence
+from MoveNet import extract_keypoints_from_video
+from visualize_feedback import visualize_pose_feedback, summarize_top_joints, JOINT_FEEDBACK_MAP
+
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -41,6 +47,15 @@ def extract_pose():
     'keypoints_path': keypoints_path.replace('\\', '/')
 })
 
+def predict_framewise_labels(diff_seq, model_path):
+    model = load_model(model_path)
+    padded = pad_sequences([diff_seq], padding='post', maxlen=267, dtype='float32')
+    preds = model.predict(padded)[0]  # (267,) 또는 (267, classes)
+
+    labels = (preds > 0.5).astype(int).tolist()[:len(diff_seq)]
+    confidence = float(np.mean(preds[:len(diff_seq)]))  # 평균 확률값 → 점수 기준
+
+    return labels, confidence
 
 @app.route('/analyze_pose', methods=['POST'])
 def analyze_pose():
@@ -80,16 +95,25 @@ def analyze_pose():
         distance, ref, test, path = compare_poses(reference_path, test_path)
         diff_seq = compute_diff_sequence(ref, test, path)
 
+        #프레임별 예측
+        labels, confidence = predict_framewise_labels(diff_seq, model_path)
+        score = round(confidence * 100, 2)
+
         # 비교 영상 생성 (여기로 이동)
         comparison_filename = f"comparison_{uuid.uuid4().hex}.mp4"
         comparison_path = os.path.join("outputs", comparison_filename)
-        visualize_keypoint_diff(ref, test, save_path=comparison_path)
-
-        feedback_text = predict_feedback(diff_seq, model_path)
+        visualize_pose_feedback(ref, test, labels, comparison_path, source_video=trimmed_path)
+        
+        if sum(labels) == 0:
+            feedback_text = "자세가 적절합니다!"
+        else:
+            top_joints = summarize_top_joints(diff_seq, labels, top_k=2)
+            feedback_text = " / ".join([JOINT_FEEDBACK_MAP.get(j, f"{j}번 관절 문제") for j in top_joints])
 
         return jsonify({
             'feedback': feedback_text,
             'distance': round(distance, 2),
+            'score': score,
             'pitch_type': pitch_type,
             'comparison_video': comparison_filename
         })
@@ -98,15 +122,6 @@ def analyze_pose():
         print(f"❌ 서버 내부 오류: {e}")
         return jsonify({'error': '서버 오류 발생', 'detail': str(e)}), 500
 
-
-def predict_feedback(diff_seq, model_path):
-    model = load_model(model_path)
-    padded = pad_sequences([diff_seq], padding='post', maxlen=267, dtype='float32')
-    pred = model.predict(padded)
-
-    label_map = {0: "자세가 적절합니다!"}  # 단일 클래스 기준으로 메시지 설정
-    predicted_label = 0 if pred[0][0] > 0.5 else 1
-    return label_map.get(predicted_label, "자세가 개선이 필요합니다.")
 
 #스트리밍 mp4
 @app.route('/video/<filename>')

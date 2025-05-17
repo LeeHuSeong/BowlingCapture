@@ -34,7 +34,7 @@ class VideoService {
   }
 
    static Future<File?> downloadComparisonVideo() async {
-    final url = 'http://192.168.35.231:5000/get_comparison_video'; // 실제 서버 주소로 교체 필요
+    final url = 'http://10.0.2.2:5000/get_comparison_video'; // 실제 서버 주소로 교체 필요
 
   try {
     final response = await http.get(Uri.parse(url));
