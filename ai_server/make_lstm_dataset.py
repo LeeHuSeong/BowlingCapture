@@ -22,17 +22,24 @@ for root, dirs, files in os.walk(keypoint_dir):
         file_path = os.path.join(root, filename)
         output_dir = os.path.join(base_output_dir, label_name)
         os.makedirs(output_dir, exist_ok=True)
-
+        
         try:
-            distance, ref, test, path = compare_poses(file_path, file_path)
+            #distance, ref, test, path = compare_poses(file_path, file_path)
+            reference_path = "Data/keypoints/twohand/twohand_001.npy"  # 기준자세 (twohand 중 하나)
+            test_path = file_path
+            distance, ref, test, path = compare_poses(reference_path, test_path)
             diff_seq = compute_diff_sequence(ref, test, path)
+
+            # 고쳐야 됨, 학습 데이터에 틀린거 없어서 임시방편.# 그 다음에 라벨 생성
+            if label_name == "twohand":
+                label_seq = np.zeros((diff_seq.shape[0], 1))  # 정상
+            else:
+                label_seq = np.ones((diff_seq.shape[0], 1))   # 틀린 동작
 
             base_name = filename.replace(".npy", "")
             np.save(os.path.join(output_dir, f"{base_name}_diff.npy"), diff_seq)
+            np.save(os.path.join(output_dir, f"{base_name}_label.npy"), label_seq) 
 
-            with open(os.path.join(output_dir, f"{base_name}_label.txt"), "w") as f:
-                f.write("0")  # 이 라벨은 현재 필요 없음 (모두 같은 클래스이기 때문)
-
-            print(f"✅ 저장됨: {label_name}/{base_name}")
+            print(f"✅ 저장됨: {label_name}/{base_name} (diff + label)")
         except Exception as e:
             print(f"⚠️ 실패: {filename} → {e}")

@@ -45,9 +45,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final path = widget.editedVideoPath;
 
     try {
-      // 1. 영상 업로드 → 키포인트 추출
-      //final uri = Uri.parse('http://127.0.0.1:5000/extract_pose');
-      //에뮬레이터
       final uri = Uri.parse('http://10.0.2.2:5000/extract_pose');
       final request = http.MultipartRequest('POST', uri);
       request.files.add(await http.MultipartFile.fromPath('video', path));
@@ -62,11 +59,9 @@ class _HomeScreenState extends State<HomeScreen> {
         throw Exception('서버 오류: $responseBody');
       }
 
-      // 2. 분석 요청
       final extracted = jsonDecode(responseBody);
-      //원 코드
-      //final analyzeUri = Uri.parse('http://127.0.0.1:5000/analyze_pose');
-      //에뮬레이터
+      final trimmedVideoPath = extracted['trimmed_video'];
+
       final analyzeUri = Uri.parse('http://10.0.2.2:5000/analyze_pose');
       final analyzeResponse = await http.post(
         analyzeUri,
@@ -74,6 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
         body: jsonEncode({
           'test_keypoints': extracted['keypoints_path'].replaceAll('\\', '/'),
           'pitch_type': widget.style.toLowerCase(),
+          'source_video': trimmedVideoPath,
         }),
       );
 

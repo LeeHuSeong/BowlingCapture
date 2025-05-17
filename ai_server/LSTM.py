@@ -7,6 +7,9 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Masking
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
+from tensorflow.keras.layers import TimeDistributed
+
+
 # 구질 인자 입력 받기
 if len(sys.argv) < 2:
     print("❗ 사용법: python LSTM.py twohand")
@@ -21,21 +24,27 @@ def load_lstm_dataset(folder):
     for filename in os.listdir(folder):
         if filename.endswith("_diff.npy"):
             diff_path = os.path.join(folder, filename)
+            label_path = diff_path.replace("_diff.npy", "_label.npy")
+            
             try:
                 diff_seq = np.load(diff_path)
+                label_seq = np.load(label_path)
+
                 X.append(diff_seq)
-                y.append(0)  # 단일 클래스: 자기자신 비교용이므로 0으로 고정
+                y.append(label_seq)
             except Exception as e:
                 print(f"⚠️ 오류: {filename} → {e}")
     return X, y
 
+
+
 def build_model(input_shape):
     model = Sequential([
         Masking(mask_value=0.0, input_shape=input_shape),
-        LSTM(64, return_sequences=True),
-        LSTM(64),
-        Dense(64, activation='relu'),
-        Dense(1, activation='sigmoid')  # 단일 클래스 이진 분류처럼 처리 (잘했는가/못했는가)
+        LSTM(64, return_sequences=True),  # 시퀀스 유지
+        LSTM(64, return_sequences=True),  # 🔁 두 번째 LSTM도 시퀀스 유지해야 함
+        TimeDistributed(Dense(64, activation='relu')),
+        TimeDistributed(Dense(1, activation='sigmoid'))  # ✅ 프레임별 이진 분류
     ])
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     return model
@@ -48,8 +57,15 @@ if len(X) < 3:
 
 print(f"📂 {pitch_type} 데이터 개수: {len(X)}")
 
-X = pad_sequences(X, padding='post', dtype='float32')
-y = np.array(y)
+X = pad_sequences(X, padding='post', dtype='float32')         # (batch, maxlen, 34)
+y = pad_sequences(y, padding='post', dtype='float32')         # (batch, maxlen, 1)
+
+print("✅ X shape:", X.shape)
+print("✅ y shape:", y.shape)
+print("✅ y unique:", np.unique(y))
+print("✅ X max:", np.max(X))
+print("✅ X min:", np.min(X))
+print("✅ X mean:", np.mean(X))
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 

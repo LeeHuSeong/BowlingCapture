@@ -18,8 +18,12 @@ JOINT_FEEDBACK_MAP = {
 }
 
 def visualize_pose_feedback(ref, test, labels, save_path, source_video):
+    print(f"🔎 ref length: {len(ref)}, test length: {len(test)}, labels: {len(labels)}")
+
     cap = cv2.VideoCapture(source_video)
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+    
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -31,7 +35,13 @@ def visualize_pose_feedback(ref, test, labels, save_path, source_video):
         if not ret:
             print(f"⚠️ 프레임 {frame_idx} 읽기 실패")
             break
-
+        
+        if i == 0:
+            print("🦴 ref keypoints frame 0:")
+            print(ref[0])  # shape: (17, 3)
+            print("🦴 test keypoints frame 0:")
+            print(test[0])  
+            
         for j in range(17):
             x1, y1, c1 = ref[i][j]
             x2, y2, c2 = test[i][j]
@@ -51,6 +61,8 @@ def visualize_pose_feedback(ref, test, labels, save_path, source_video):
 
     cap.release()
     out.release()
+    print(f"📼 source_video: {source_video}")
+    print(f"🎬 FPS: {fps}, 총 프레임 수: {frame_count}")
     print(f"📼 시각화 저장 완료: {save_path}, 길이: {frame_idx}, fps: {fps}")
 
 def summarize_top_joints(diff_seq, labels, top_k=2):

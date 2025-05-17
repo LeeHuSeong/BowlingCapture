@@ -7,6 +7,7 @@ import uuid
 import numpy as np
 import cv2
 from flask import Flask, request, jsonify, send_from_directory
+from flask import send_file
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
@@ -14,6 +15,7 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from DTW import compare_poses, compute_diff_sequence
 from MoveNet import extract_keypoints_from_video
 from visualize_feedback import visualize_pose_feedback, summarize_top_joints, JOINT_FEEDBACK_MAP
+
 
 
 app = Flask(__name__)
@@ -44,16 +46,26 @@ def extract_pose():
 
     return jsonify({
     'message': 'Pose extracted',
-    'keypoints_path': keypoints_path.replace('\\', '/')
+    'keypoints_path': keypoints_path.replace('\\', '/'),
+    'trimmed_video': trimmed_path.replace('\\', '/')  # ✅ 추가
 })
 
 def predict_framewise_labels(diff_seq, model_path):
     model = load_model(model_path)
-    padded = pad_sequences([diff_seq], padding='post', maxlen=267, dtype='float32')
-    preds = model.predict(padded)[0]  # (267,) 또는 (267, classes)
+    padded = pad_sequences([diff_seq], padding='post', maxlen=278)
 
-    labels = (preds > 0.5).astype(int).tolist()[:len(diff_seq)]
-    confidence = float(np.mean(preds[:len(diff_seq)]))  # 평균 확률값 → 점수 기준
+    preds = model.predict(padded)  # shape: (1, T, 1) or (1, T)
+    framewise = np.squeeze(preds[0])  # ⚠️ 안전하게 squeeze
+
+    # 💡 단일 값으로 squeeze된 경우 대비
+    if framewise.ndim == 0:
+        framewise = np.array([framewise])
+
+    labels = (framewise > 0.5).astype(int).tolist()[:len(diff_seq)]
+    confidence = float(np.mean(framewise[:len(diff_seq)]))
+
+    print(f"✅ preds shape: {preds.shape}")
+    print(f"🎯 labels 생성됨: {len(labels)}개, confidence: {confidence:.2f}")
 
     return labels, confidence
 
@@ -99,16 +111,39 @@ def analyze_pose():
         labels, confidence = predict_framewise_labels(diff_seq, model_path)
         score = round(confidence * 100, 2)
 
+        #labels 체크
+        if len(labels) < 2:
+            print("⚠️ 시각화용 labels가 너무 적습니다. 비교 영상 생략")
+            return jsonify({
+                'feedback': '분석할 수 있는 자세 정보가 부족합니다.',
+                'distance': round(distance, 2),
+                'score': 0.0,
+                'pitch_type': pitch_type,
+                'comparison_video': None
+            })
+
         # 비교 영상 생성 (여기로 이동)
         comparison_filename = f"comparison_{uuid.uuid4().hex}.mp4"
         comparison_path = os.path.join("outputs", comparison_filename)
-        visualize_pose_feedback(ref, test, labels, comparison_path, source_video=trimmed_path)
+
+        #동영상 위에 선그리기
+        source_video = request.json.get('source_video')
+        if not source_video or not os.path.exists(source_video):
+            return jsonify({'error': '원본 trimmed 영상 경로 누락 또는 존재하지 않음'}), 400
+
+        visualize_pose_feedback(ref, test, labels, comparison_path, source_video=source_video)
+
         
-        if sum(labels) == 0:
+        wrong_ratio = sum(labels) / len(labels)
+
+        if wrong_ratio < 0.1:
             feedback_text = "자세가 적절합니다!"
+        elif score > 80:
+            feedback_text = "전반적으로 양호하나 약간의 보완이 필요합니다."
         else:
             top_joints = summarize_top_joints(diff_seq, labels, top_k=2)
             feedback_text = " / ".join([JOINT_FEEDBACK_MAP.get(j, f"{j}번 관절 문제") for j in top_joints])
+
 
         return jsonify({
             'feedback': feedback_text,
@@ -126,21 +161,52 @@ def analyze_pose():
 #스트리밍 mp4
 @app.route('/video/<filename>')
 def serve_video(filename):
-    return send_from_directory('outputs', filename)
+    path = os.path.join('outputs', filename)
+    if not os.path.exists(path):
+        return jsonify({'error': '비교 영상이 존재하지 않습니다.'}), 404
+
+    print(f"📤 영상 전송 시작: {filename}")
+    return send_file(path, mimetype='video/mp4', as_attachment=False)
 
 
 def trim_video_opencv(input_path, output_path, start_time, end_time):
     cap = cv2.VideoCapture(input_path)
+    if not cap.isOpened():
+        print("❌ 원본 영상 열기 실패")
+        return
+
     fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    if fps == 0 or total_frames == 0:
+        print("❌ FPS 또는 전체 프레임 수가 0입니다.")
+        cap.release()
+        return
+
     start_frame = int(start_time * fps)
     end_frame = int(end_time * fps)
+
+    # 최소 프레임 확보
+    if end_frame <= start_frame:
+        end_frame = start_frame + int(fps * 2)  # 최소 2초 확보
+    if end_frame >= total_frames:
+        end_frame = total_frames - 1
 
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    out = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
-    frame_idx = 0
+    #확장자에 따라 코덱 다르게 설정
+    if output_path.endswith('.mp4'):
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    elif output_path.endswith('.avi'):
+        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    else:
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # fallback
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
+
+    frame_idx = 0
+    written = 0
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
@@ -149,11 +215,16 @@ def trim_video_opencv(input_path, output_path, start_time, end_time):
             break
         if start_frame <= frame_idx <= end_frame:
             out.write(frame)
+            written += 1
         frame_idx += 1
 
     cap.release()
     out.release()
-    print(f"✅ 잘라낸 영상 저장 완료: {output_path}")
+
+    if written == 0:
+        print("⚠️ 자른 영상 프레임이 0입니다. 저장 실패 가능성 있음.")
+    else:
+        print(f"✅ 잘라낸 영상 저장 완료: {output_path} (프레임 수: {written}, FPS: {fps})")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
