@@ -2,6 +2,7 @@
 from flask import Flask, request, jsonify
 import os
 import uuid
+import numpy as np
 from MoveNet import extract_keypoints_from_video
 from DTW import compare_poses, compute_diff_sequence, visualize_keypoint_diff
 from tensorflow.keras.models import load_model
@@ -35,7 +36,10 @@ def extract_pose():
 
     keypoints_path = extract_keypoints_from_video(trimmed_path, OUTPUT_FOLDER)
 
-    return jsonify({'message': 'Pose extracted', 'keypoints_path': keypoints_path})
+    return jsonify({
+    'message': 'Pose extracted',
+    'keypoints_path': keypoints_path.replace('\\', '/')
+})
 
 
 @app.route('/analyze_pose', methods=['POST'])
@@ -44,12 +48,31 @@ def analyze_pose():
         test_filename = request.json.get('test_keypoints')
         pitch_type = request.json.get('pitch_type')
 
+        #디버깅 로그
+        print("✅ analyze_pose 요청 수신")
+        print(f"📩 받은 test_keypoints: {test_filename}")
+        print(f"📩 받은 pitch_type: {pitch_type}")
+
         if not test_filename or not pitch_type:
             return jsonify({'error': 'test_keypoints 또는 pitch_type 누락'}), 400
+        
+        # 한글 → 영문 pitch_type 매핑
+        type_map = {'스트로커':'stroker','투핸드': 'twohand', '덤리스': 'thumbless', '크랭커':'cranker'}
+        mapped_type = type_map.get(pitch_type.strip(), pitch_type.strip())  # 매핑 없으면 그대로 사용
+        print(f"📂 pitch_type 매핑 결과: {mapped_type}")
 
+        # 경로 정규화
+        test_path = os.path.normpath(test_filename)
+        test_path = os.path.abspath(test_path)
+        print(f"📂 최종 정규화된 경로: {test_path}, 존재 여부: {os.path.exists(test_path)}")
+        
         reference_path = os.path.abspath("Data/keypoints/twohand/twohand_001.npy")
-        test_path = os.path.abspath(test_filename.replace("\\", "/"))
-        model_path = f"lstm_{pitch_type}.h5"
+        model_path = os.path.abspath(f"lstm_{mapped_type}.h5")
+
+        # 경로 존재 여부 체크 (로깅 포함)
+        print(f"📂 test_path: {test_path}, exists: {os.path.exists(test_path)}")
+        print(f"📂 reference_path: {reference_path}, exists: {os.path.exists(reference_path)}")
+        print(f"📂 model_path: {model_path}, exists: {os.path.exists(model_path)}")
 
         if not os.path.exists(reference_path) or not os.path.exists(test_path) or not os.path.exists(model_path):
             return jsonify({'error': '파일 경로가 잘못되었거나 모델이 없습니다.'}), 400
@@ -57,7 +80,7 @@ def analyze_pose():
         distance, ref, test, path = compare_poses(reference_path, test_path)
         diff_seq = compute_diff_sequence(ref, test, path)
 
-        # ✅ 비교 영상 생성 (여기로 이동)
+        # 비교 영상 생성 (여기로 이동)
         comparison_filename = f"comparison_{uuid.uuid4().hex}.mp4"
         comparison_path = os.path.join("outputs", comparison_filename)
         visualize_keypoint_diff(ref, test, save_path=comparison_path)

@@ -66,7 +66,9 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                 child: VideoPlayer(_controller),
               ),
             const SizedBox(height: 16),
-            Text("시작: ${_start.toStringAsFixed(1)}초  /  끝: ${_end.toStringAsFixed(1)}초"),
+
+            // 슬라이더는 여기 ↓ 영상 아래에 위치
+            Text("시작: ${_start.toStringAsFixed(1)} / 끝: ${_end.toStringAsFixed(1)}"),
             RangeSlider(
               min: 0,
               max: _max,
@@ -78,6 +80,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                 });
               },
             ),
+
             ElevatedButton(
               onPressed: _proceed,
               child: const Text("선택한 구간 업로드"),

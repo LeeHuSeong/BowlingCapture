@@ -46,7 +46,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       // 1. 영상 업로드 → 키포인트 추출
-      final uri = Uri.parse('http://127.0.0.1:5000/extract_pose');
+      //final uri = Uri.parse('http://127.0.0.1:5000/extract_pose');
+      //에뮬레이터
+      final uri = Uri.parse('http://10.0.2.2:5000/extract_pose');
       final request = http.MultipartRequest('POST', uri);
       request.files.add(await http.MultipartFile.fromPath('video', path));
       request.fields['start'] = widget.startTime.toString();
@@ -62,12 +64,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // 2. 분석 요청
       final extracted = jsonDecode(responseBody);
-      final analyzeUri = Uri.parse('http://127.0.0.1:5000/analyze_pose');
+      //원 코드
+      //final analyzeUri = Uri.parse('http://127.0.0.1:5000/analyze_pose');
+      //에뮬레이터
+      final analyzeUri = Uri.parse('http://10.0.2.2:5000/analyze_pose');
       final analyzeResponse = await http.post(
         analyzeUri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'test_keypoints': extracted['keypoints_path'],
+          'test_keypoints': extracted['keypoints_path'].replaceAll('\\', '/'),
           'pitch_type': widget.style.toLowerCase(),
         }),
       );

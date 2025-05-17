@@ -9,14 +9,14 @@ label_map = {"cranker": 0, "twohand": 1, "stroker": 2}
 # 키포인트 파일 반복
 for root, dirs, files in os.walk(keypoint_dir):
     for filename in files:
-        print(f"📄 처리 중: {filename}")
+        print(f"처리 중: {filename}")
 
         if not filename.endswith(".npy"):
             continue
 
         label_name = filename.split("_")[0].lower()
         if label_name not in label_map:
-            print(f"❌ 라벨 없음 또는 무시: {label_name}")
+            print(f"라벨 없음 또는 무시: {label_name}")
             continue
 
         file_path = os.path.join(root, filename)
