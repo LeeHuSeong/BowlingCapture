@@ -134,16 +134,16 @@ def analyze_pose():
         visualize_pose_feedback(ref, test, labels, comparison_path, source_video=source_video)
 
         
+        # 정량적 기준 재조정
         wrong_ratio = sum(labels) / len(labels)
 
-        if wrong_ratio < 0.1:
-            feedback_text = "자세가 적절합니다!"
-        elif score > 80:
+        if score >= 80 and wrong_ratio < 0.1:
+            feedback_text = "자세가 매우 적절합니다!"
+        elif score >= 60:
             feedback_text = "전반적으로 양호하나 약간의 보완이 필요합니다."
         else:
             top_joints = summarize_top_joints(diff_seq, labels, top_k=2)
             feedback_text = " / ".join([JOINT_FEEDBACK_MAP.get(j, f"{j}번 관절 문제") for j in top_joints])
-
 
         return jsonify({
             'feedback': feedback_text,
@@ -168,8 +168,7 @@ def serve_video(filename):
     print(f"📤 영상 전송 시작: {filename}")
     return send_file(path, mimetype='video/mp4', as_attachment=False)
 
-
-def trim_video_opencv(input_path, output_path, start_time, end_time):
+def trim_video_opencv(input_path, output_path, start_time, end_time, rotate=False):
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
         print("❌ 원본 영상 열기 실패")
@@ -186,36 +185,40 @@ def trim_video_opencv(input_path, output_path, start_time, end_time):
     start_frame = int(start_time * fps)
     end_frame = int(end_time * fps)
 
-    # 최소 프레임 확보
     if end_frame <= start_frame:
-        end_frame = start_frame + int(fps * 2)  # 최소 2초 확보
+        end_frame = start_frame + int(fps * 2)
     if end_frame >= total_frames:
         end_frame = total_frames - 1
 
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    #확장자에 따라 코덱 다르게 설정
+    # 🔁 회전 감안한 너비/높이
+    if rotate:
+        width, height = height, width
+
     if output_path.endswith('.mp4'):
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')  # ✅ 호환성 높은 H.264
     elif output_path.endswith('.avi'):
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
     else:
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # fallback
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')
 
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
     frame_idx = 0
     written = 0
     while cap.isOpened():
         ret, frame = cap.read()
-        if not ret:
+        if not ret or frame_idx > end_frame:
             break
-        if frame_idx > end_frame:
-            break
+
         if start_frame <= frame_idx <= end_frame:
+            if rotate:
+                frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
             out.write(frame)
             written += 1
+
         frame_idx += 1
 
     cap.release()

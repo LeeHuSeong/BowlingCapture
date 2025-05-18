@@ -1,4 +1,3 @@
-# visualize_feedback.py
 import numpy as np
 import cv2
 
@@ -18,52 +17,69 @@ JOINT_FEEDBACK_MAP = {
 }
 
 def visualize_pose_feedback(ref, test, labels, save_path, source_video):
-    print(f"🔎 ref length: {len(ref)}, test length: {len(test)}, labels: {len(labels)}")
+    print(f"🔎 test length: {len(test)}, labels: {len(labels)}")
 
     cap = cv2.VideoCapture(source_video)
     fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-    
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     out = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
 
-    frame_idx = 0
-    for i in range(min(len(ref), len(test), len(labels))):
+    POSE_PAIRS = [
+        (0, 1), (1, 3), (0, 2), (2, 4), 
+        (5, 7), (7, 9),
+        (6, 8), (8, 10),
+        (5, 6),
+        (5, 11), (6, 12),
+        (11, 12),
+        (11, 13), (13, 15),
+        (12, 14), (14, 16)
+    ]
+
+    for i in range(min(len(test), len(labels))):
         ret, frame = cap.read()
         if not ret:
-            print(f"⚠️ 프레임 {frame_idx} 읽기 실패")
+            print(f"⚠️ 프레임 {i} 읽기 실패")
             break
-        
-        if i == 0:
-            print("🦴 ref keypoints frame 0:")
-            print(ref[0])  # shape: (17, 3)
-            print("🦴 test keypoints frame 0:")
-            print(test[0])  
-            
-        for j in range(17):
-            x1, y1, c1 = ref[i][j]
-            x2, y2, c2 = test[i][j]
 
-            # 정규화된 좌표 → 픽셀 좌표
-            x1 = int(x1 * width) if x1 <= 1 else int(x1)
-            y1 = int(y1 * height) if y1 <= 1 else int(y1)
-            x2 = int(x2 * width) if x2 <= 1 else int(x2)
-            y2 = int(y2 * height) if y2 <= 1 else int(y2)
+        keypoints = test[i]
+        label = int(labels[i])  # ← ✅ float 또는 ndarray 대비
+
+        # 👉 좌우 반전
+        frame = cv2.flip(frame, 1)
+
+        for j in range(17):
+            x, y, c = keypoints[j]
+            if c < 0.3:
+                continue
+
+            x = int(x * width) if x <= 1 else int(x)
+            y = int(y * height) if y <= 1 else int(y)
+
+            # 점 추가
+            color = (0, 255, 0) if label == 0 else (0, 0, 255)
+            cv2.circle(frame, (x, y), 4, color, -1)
+
+        for a, b in POSE_PAIRS:
+            x1, y1, c1 = keypoints[a]
+            x2, y2, c2 = keypoints[b]
 
             if c1 > 0.3 and c2 > 0.3:
-                color = (0, 255, 0) if labels[i] == 0 else (0, 0, 255)
+                x1 = int(x1 * width) if x1 <= 1 else int(x1)
+                y1 = int(y1 * height) if y1 <= 1 else int(y1)
+                x2 = int(x2 * width) if x2 <= 1 else int(x2)
+                y2 = int(y2 * height) if y2 <= 1 else int(y2)
+
+                color = (0, 255, 0) if label == 0 else (0, 0, 255)
                 cv2.line(frame, (x1, y1), (x2, y2), color, 2)
 
         out.write(frame)
-        frame_idx += 1
 
     cap.release()
     out.release()
-    print(f"📼 source_video: {source_video}")
-    print(f"🎬 FPS: {fps}, 총 프레임 수: {frame_count}")
-    print(f"📼 시각화 저장 완료: {save_path}, 길이: {frame_idx}, fps: {fps}")
+    print(f"🎬 시각화 저장 완료: {save_path} (fps: {fps})")
+
 
 def summarize_top_joints(diff_seq, labels, top_k=2):
     joint_error_sum = np.zeros(17)

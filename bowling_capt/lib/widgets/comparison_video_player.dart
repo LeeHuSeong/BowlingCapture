@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'dart:math';
 
 class ComparisonVideoPlayer extends StatefulWidget {
   final String videoUrl;
@@ -17,6 +18,10 @@ class _ComparisonVideoPlayerState extends State<ComparisonVideoPlayer> {
   @override
   void initState() {
     super.initState();
+    _initializeController();
+  }
+
+  void _initializeController() {
     print("🎯 videoUrl: ${widget.videoUrl}");
 
     _controller = VideoPlayerController.network(widget.videoUrl)
@@ -24,20 +29,36 @@ class _ComparisonVideoPlayerState extends State<ComparisonVideoPlayer> {
         setState(() => _initialized = true);
       }).catchError((e) {
         print("🎥 비디오 초기화 오류: $e");
-        setState(() => _initialized = true); // 화면에 에러 메시지라도 표시
+        setState(() => _initialized = true);
       });
   }
 
+  @override
+  void didUpdateWidget(covariant ComparisonVideoPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.videoUrl != widget.videoUrl) {
+      _controller.dispose();
+      _initialized = false;
+      _initializeController();
+    }
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
-    super.dispose();
+  if (_controller.value.isPlaying) {
+    _controller.pause();
   }
+  _controller.dispose();
+  super.dispose();
+}
 
   void _togglePlayPause() {
     setState(() {
-      _controller.value.isPlaying ? _controller.pause() : _controller.play();
+      if (_controller.value.isPlaying) {
+        _controller.pause();
+      } else {
+        _controller.play();
+      }
     });
   }
 
@@ -53,21 +74,27 @@ class _ComparisonVideoPlayerState extends State<ComparisonVideoPlayer> {
       );
     }
 
-    return Column(
-      children: [
-        AspectRatio(
-          aspectRatio: _controller.value.aspectRatio,
-          child: VideoPlayer(_controller),
+    return Center(
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.4,
+          maxWidth: MediaQuery.of(context).size.width * 0.9,
         ),
-        const SizedBox(height: 10),
-        VideoProgressIndicator(_controller, allowScrubbing: true),
-        IconButton(
-          icon: Icon(
-            _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
-          ),
-          onPressed: _togglePlayPause,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AspectRatio(
+              aspectRatio: _controller.value.aspectRatio,
+              child: VideoPlayer(_controller),
+            ),
+            const SizedBox(height: 10),
+            IconButton(
+              icon: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
+              onPressed: _togglePlayPause,
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
