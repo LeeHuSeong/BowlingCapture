@@ -16,18 +16,37 @@ JOINT_FEEDBACK_MAP = {
     16: "오른발의 흔들림을 줄이세요."
 }
 
-def visualize_pose_feedback(ref, test, labels, save_path, source_video):
+def visualize_pose_feedback(ref, test, labels, save_path, source_video, rotation=0):
+    import numpy as np
+    import cv2
+
+    def is_normalized(val):
+        return 0.0 <= val <= 1.0
+
+    def rotate_keypoints_normalized(keypoints, angle):
+        rotated = []
+        for x, y, c in keypoints:
+            if angle == 90:
+                new_x = 1.0 - y
+                new_y = x
+            elif angle == 180:
+                new_x = 1.0 - x
+                new_y = 1.0 - y
+            elif angle == 270:
+                new_x = y
+                new_y = 1.0 - x
+            else:
+                new_x, new_y = x, y
+            rotated.append((new_x, new_y, c))
+        return np.array(rotated)
+
     print(f"🔎 test length: {len(test)}, labels: {len(labels)}")
 
     cap = cv2.VideoCapture(source_video)
     fps = cap.get(cv2.CAP_PROP_FPS)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    out = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
 
     POSE_PAIRS = [
-        (0, 1), (1, 3), (0, 2), (2, 4), 
+        (0, 1), (1, 3), (0, 2), (2, 4),
         (5, 7), (7, 9),
         (6, 8), (8, 10),
         (5, 6),
@@ -37,44 +56,66 @@ def visualize_pose_feedback(ref, test, labels, save_path, source_video):
         (12, 14), (14, 16)
     ]
 
+    ret, first_frame = cap.read()
+    if not ret:
+        print("❌ 첫 프레임 읽기 실패")
+        return
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+    frame_height, frame_width = first_frame.shape[:2]
+    PADDING = 40
+    canvas_height = frame_height + PADDING * 2
+    canvas_width = frame_width
+
+    if rotation in [90, 270]:
+        output_size = (canvas_height, canvas_width)
+    else:
+        output_size = (canvas_width, canvas_height)
+
+    out = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, output_size)
+
     for i in range(min(len(test), len(labels))):
         ret, frame = cap.read()
         if not ret:
             print(f"⚠️ 프레임 {i} 읽기 실패")
             break
 
-        keypoints = test[i]
-        label = int(labels[i])  # ← ✅ float 또는 ndarray 대비
+        canvas = np.full((canvas_height, canvas_width, 3), 255, dtype=np.uint8)
+        y_offset = PADDING
+        canvas[y_offset:y_offset + frame_height, 0:frame_width] = frame
 
-        # 👉 좌우 반전
-        frame = cv2.flip(frame, 1)
+        # ✅ 정규화 좌표 회전
+        rotated_kpts = rotate_keypoints_normalized(test[i], rotation)
+
+        label = int(labels[i])
+        color = (0, 255, 0) if label == 0 else (0, 0, 255)
 
         for j in range(17):
-            x, y, c = keypoints[j]
+            x, y, c = rotated_kpts[j]
             if c < 0.3:
                 continue
-
-            x = int(x * width) if x <= 1 else int(x)
-            y = int(y * height) if y <= 1 else int(y)
-
-            # 점 추가
-            color = (0, 255, 0) if label == 0 else (0, 0, 255)
-            cv2.circle(frame, (x, y), 4, color, -1)
+            x = int(x * frame_width)
+            y = int(y * frame_height) + y_offset
+            cv2.circle(canvas, (x, y), 4, color, -1)
 
         for a, b in POSE_PAIRS:
-            x1, y1, c1 = keypoints[a]
-            x2, y2, c2 = keypoints[b]
-
+            x1, y1, c1 = rotated_kpts[a]
+            x2, y2, c2 = rotated_kpts[b]
             if c1 > 0.3 and c2 > 0.3:
-                x1 = int(x1 * width) if x1 <= 1 else int(x1)
-                y1 = int(y1 * height) if y1 <= 1 else int(y1)
-                x2 = int(x2 * width) if x2 <= 1 else int(x2)
-                y2 = int(y2 * height) if y2 <= 1 else int(y2)
+                x1 = int(x1 * frame_width)
+                y1 = int(y1 * frame_height) + y_offset
+                x2 = int(x2 * frame_width)
+                y2 = int(y2 * frame_height) + y_offset
+                cv2.line(canvas, (x1, y1), (x2, y2), color, 2)
 
-                color = (0, 255, 0) if label == 0 else (0, 0, 255)
-                cv2.line(frame, (x1, y1), (x2, y2), color, 2)
+        if rotation == 90:
+            canvas = cv2.rotate(canvas, cv2.ROTATE_90_CLOCKWISE)
+        elif rotation == 180:
+            canvas = cv2.rotate(canvas, cv2.ROTATE_180)
+        elif rotation == 270:
+            canvas = cv2.rotate(canvas, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
-        out.write(frame)
+        out.write(canvas)
 
     cap.release()
     out.release()
@@ -83,12 +124,9 @@ def visualize_pose_feedback(ref, test, labels, save_path, source_video):
 
 def summarize_top_joints(diff_seq, labels, top_k=2):
     joint_error_sum = np.zeros(17)
-
     for i, label in enumerate(labels):
         if label == 1:
             diffs = diff_seq[i].reshape(17, 2)
             mags = np.linalg.norm(diffs, axis=1)
             joint_error_sum += mags
-
-    top_joint_indices = np.argsort(joint_error_sum)[-top_k:][::-1]  # 큰 순서로
-    return list(top_joint_indices)
+    return list(np.argsort(joint_error_sum)[-top_k:][::-1])

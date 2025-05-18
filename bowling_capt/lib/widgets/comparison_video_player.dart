@@ -22,8 +22,6 @@ class _ComparisonVideoPlayerState extends State<ComparisonVideoPlayer> {
   }
 
   void _initializeController() {
-    print("🎯 videoUrl: ${widget.videoUrl}");
-
     _controller = VideoPlayerController.network(widget.videoUrl)
       ..initialize().then((_) {
         setState(() => _initialized = true);
@@ -37,6 +35,7 @@ class _ComparisonVideoPlayerState extends State<ComparisonVideoPlayer> {
   void didUpdateWidget(covariant ComparisonVideoPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.videoUrl != widget.videoUrl) {
+      _controller.pause();
       _controller.dispose();
       _initialized = false;
       _initializeController();
@@ -45,20 +44,20 @@ class _ComparisonVideoPlayerState extends State<ComparisonVideoPlayer> {
 
   @override
   void dispose() {
-  if (_controller.value.isPlaying) {
-    _controller.pause();
+    try {
+      if (_controller.value.isInitialized) {
+        _controller.pause();
+      }
+      _controller.dispose();
+    } catch (e) {
+      print("🧨 dispose 오류: $e");
+    }
+    super.dispose();
   }
-  _controller.dispose();
-  super.dispose();
-}
 
   void _togglePlayPause() {
     setState(() {
-      if (_controller.value.isPlaying) {
-        _controller.pause();
-      } else {
-        _controller.play();
-      }
+      _controller.value.isPlaying ? _controller.pause() : _controller.play();
     });
   }
 
@@ -74,27 +73,19 @@ class _ComparisonVideoPlayerState extends State<ComparisonVideoPlayer> {
       );
     }
 
-    return Center(
-      child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.4,
-          maxWidth: MediaQuery.of(context).size.width * 0.9,
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        GestureDetector(
+          onTap: _togglePlayPause,
+          child: AspectRatio(
+            aspectRatio: _controller.value.aspectRatio,
+            child: VideoPlayer(_controller),
+          ),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AspectRatio(
-              aspectRatio: _controller.value.aspectRatio,
-              child: VideoPlayer(_controller),
-            ),
-            const SizedBox(height: 10),
-            IconButton(
-              icon: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
-              onPressed: _togglePlayPause,
-            ),
-          ],
-        ),
-      ),
+        if (!_controller.value.isPlaying)
+          const Icon(Icons.play_arrow, size: 64, color: Colors.white70),
+      ],
     );
   }
 }
