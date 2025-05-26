@@ -1,4 +1,3 @@
-# MoveNet.py
 import numpy as np
 import tensorflow as tf
 import tensorflow_hub as hub
@@ -28,6 +27,13 @@ def detect_pose(image):
     keypoints = outputs['output_0'].numpy()[0, 0, :, :]  # (17, 3)
     return keypoints
 
+# ✅ 가로 영상일 경우 세로로 회전
+def rotate_frame_if_needed(frame):  # ✅ 수정
+    h, w = frame.shape[:2]
+    if w > h:
+        return cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+    return frame
+
 def extract_keypoints_from_video(video_path, output_folder):
     video_name = os.path.splitext(os.path.basename(video_path))[0]
     label = video_name.split("_")[0]
@@ -46,6 +52,9 @@ def extract_keypoints_from_video(video_path, output_folder):
         ret, frame = cap.read()
         if not ret:
             break
+
+        frame = rotate_frame_if_needed(frame)  # ✅ 회전 적용
+
         frame_count += 1
         if frame_count % 10 == 0:
             print(f"📸 {video_name} 프레임 {frame_count} 처리 중...")

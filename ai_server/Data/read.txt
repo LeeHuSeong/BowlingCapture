@@ -4,3 +4,5 @@
 
 twohand_001
 twohand_101
+
+generate_keypoints_dataset.py로 추출 -> make_lstm_dataset.py로 lstm.h5생성

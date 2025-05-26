@@ -81,6 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final json = jsonDecode(analyzeResponse.body);
 
+      if (!mounted) return;
       setState(() {
         _result = AnalysisResult.fromJson(json).copyWith(videoPath: path);
         _isProcessing = false;
@@ -88,6 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     } catch (e) {
       print('에러 발생: $e');
+      if (!mounted) return;
       setState(() => _isProcessing = false);
     }
   }

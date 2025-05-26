@@ -10,7 +10,7 @@ import subprocess
 import json
 from flask import Flask, request, jsonify, send_from_directory
 from flask import send_file
-from tensorflow.keras.models import load_model
+from tensorflow.keras.models import load_model  
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 # 사용자 정의 모듈
@@ -133,7 +133,7 @@ def analyze_pose():
         if not source_video or not os.path.exists(source_video):
             return jsonify({'error': '원본 trimmed 영상 경로 누락 또는 존재하지 않음'}), 400
 
-        visualize_pose_feedback(ref, test, labels, comparison_path, source_video=source_video,rotation=90)
+        visualize_pose_feedback(ref, test, labels, comparison_path, source_video=source_video)
 
         
         # 정량적 기준 재조정
@@ -171,34 +171,11 @@ def serve_video(filename):
     return send_file(path, mimetype='video/mp4', as_attachment=False)
 
 
-# def get_rotation_info(video_path):
-#     try:
-#         cmd = [
-#             'ffprobe', '-v', 'quiet',
-#             '-print_format', 'json',
-#             '-show_streams',
-#             video_path
-#         ]
-#         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-#         data = json.loads(result.stdout)
-
-#         stream = next((s for s in data.get('streams', []) if s.get('codec_type') == 'video'), {})
-#         rotate_val = int(stream.get('tags', {}).get('rotate', 0)) if 'tags' in stream else 0
-#         width = int(stream.get('width', 0))
-#         height = int(stream.get('height', 0))
-
-#         print(f"📐 회전 정보: {rotate_val}도 / 해상도: {width}x{height}")
-
-#         # 🎯 회전값이 없어도 세로 비율이면 강제 회전
-#         if rotate_val == 0 and height > width:
-#             print("⚠️ 세로 비율 영상 감지 → 90도 회전 적용")
-#             return 270
-        
-#         return rotate_val
-#     except Exception as e:
-#         print(f"⚠️ 회전 정보 추출 실패: {e}")
-#         return 0
-
+def rotate_frame_if_needed(frame):
+    h, w = frame.shape[:2]
+    if w > h:
+        return cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+    return frame
 
 def trim_video_opencv(input_path, output_path, start_time, end_time):
     cap = cv2.VideoCapture(input_path)
@@ -209,36 +186,45 @@ def trim_video_opencv(input_path, output_path, start_time, end_time):
     fps = cap.get(cv2.CAP_PROP_FPS)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     if fps == 0 or total_frames == 0:
-        print("❌ FPS 또는 프레임 수가 0")
         cap.release()
+        print("❌ FPS 또는 총 프레임 수가 0입니다.")
         return
 
     start_frame = int(start_time * fps)
-    end_frame = int(end_time * fps)
-    end_frame = min(end_frame, total_frames - 1)
-    if end_frame <= start_frame:
-        end_frame = start_frame + int(fps * 2)
+    end_frame = min(int(end_time * fps), total_frames - 1)
 
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # ✅ 첫 프레임 읽기
+    ret, first_frame = cap.read()
+    if not ret:
+        cap.release()
+        print("❌ 첫 프레임 읽기 실패")
+        return
+
+    rotated_first_frame = rotate_frame_if_needed(first_frame)
+    height, width = rotated_first_frame.shape[:2]
+    print(f"🎥 Trim된 영상 해상도: {width}x{height} (가로x세로)")
+
+    # 다시 시작 위치로 이동
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
     frame_idx = 0
-    written = 0
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret or frame_idx > end_frame:
             break
+
         if start_frame <= frame_idx <= end_frame:
+            frame = rotate_frame_if_needed(frame)
             out.write(frame)
-            written += 1
+
         frame_idx += 1
 
     cap.release()
     out.release()
-    print(f"✅ 저장 완료: {output_path}, 프레임 수: {written}")
+    print(f"✅ 저장 완료: {output_path}")
 
 
 if __name__ == '__main__':

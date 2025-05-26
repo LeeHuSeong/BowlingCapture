@@ -1,5 +1,7 @@
 import numpy as np
 import cv2
+import subprocess
+import os
 
 JOINT_FEEDBACK_MAP = {
     5: "왼팔의 움직임이 불안정합니다.",
@@ -16,34 +18,44 @@ JOINT_FEEDBACK_MAP = {
     16: "오른발의 흔들림을 줄이세요."
 }
 
-def visualize_pose_feedback(ref, test, labels, save_path, source_video, rotation=0):
-    import numpy as np
-    import cv2
+def convert_video_with_ffmpeg(input_path, output_path):
+    command = [
+        'ffmpeg', '-y',
+        '-i', input_path,
+        '-vcodec', 'libx264',
+        '-pix_fmt', 'yuv420p',
+        '-vf', "scale='trunc(iw/2)*2:trunc(ih/2)*2'",
+        output_path
+    ]
+    try:
+        subprocess.run(command, check=True)
+        print(f"✅ ffmpeg 변환 완료: {output_path}")
+    except subprocess.CalledProcessError as e:
+        print("❌ ffmpeg 변환 실패:", e)
 
-    def is_normalized(val):
-        return 0.0 <= val <= 1.0
+def rotate_keypoints_90ccw(keypoints):
+    return [(y, x, c) for (x, y, c) in keypoints]
 
-    def rotate_keypoints_normalized(keypoints, angle):
-        rotated = []
-        for x, y, c in keypoints:
-            if angle == 90:
-                new_x = 1.0 - y
-                new_y = x
-            elif angle == 180:
-                new_x = 1.0 - x
-                new_y = 1.0 - y
-            elif angle == 270:
-                new_x = y
-                new_y = 1.0 - x
-            else:
-                new_x, new_y = x, y
-            rotated.append((new_x, new_y, c))
-        return np.array(rotated)
-
+def visualize_pose_feedback(ref, test, labels, save_path, source_video):
     print(f"🔎 test length: {len(test)}, labels: {len(labels)}")
 
     cap = cv2.VideoCapture(source_video)
     fps = cap.get(cv2.CAP_PROP_FPS)
+
+    ret, first_frame = cap.read()
+    if not ret:
+        print("❌ 첫 프레임 읽기 실패")
+        return
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+    frame_height, frame_width = first_frame.shape[:2]
+    PADDING = 40
+    canvas_height = frame_height + PADDING * 2
+    canvas_width = frame_width
+    output_size = (canvas_width, canvas_height)
+
+    temp_save_path = save_path.replace(".mp4", "_temp.mp4")
+    out = cv2.VideoWriter(temp_save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, output_size)
 
     POSE_PAIRS = [
         (0, 1), (1, 3), (0, 2), (2, 4),
@@ -56,23 +68,7 @@ def visualize_pose_feedback(ref, test, labels, save_path, source_video, rotation
         (12, 14), (14, 16)
     ]
 
-    ret, first_frame = cap.read()
-    if not ret:
-        print("❌ 첫 프레임 읽기 실패")
-        return
-    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-
-    frame_height, frame_width = first_frame.shape[:2]
-    PADDING = 40
-    canvas_height = frame_height + PADDING * 2
-    canvas_width = frame_width
-
-    if rotation in [90, 270]:
-        output_size = (canvas_height, canvas_width)
-    else:
-        output_size = (canvas_width, canvas_height)
-
-    out = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, output_size)
+    frame_written = 0
 
     for i in range(min(len(test), len(labels))):
         ret, frame = cap.read()
@@ -84,43 +80,43 @@ def visualize_pose_feedback(ref, test, labels, save_path, source_video, rotation
         y_offset = PADDING
         canvas[y_offset:y_offset + frame_height, 0:frame_width] = frame
 
-        # ✅ 정규화 좌표 회전
-        rotated_kpts = rotate_keypoints_normalized(test[i], rotation)
-
         label = int(labels[i])
         color = (0, 255, 0) if label == 0 else (0, 0, 255)
 
+        canvas_h, canvas_w = canvas.shape[:2]
+
+        # ✅ keypoint 좌표 회전
+        rotated_keypoints = rotate_keypoints_90ccw(test[i])
+
         for j in range(17):
-            x, y, c = rotated_kpts[j]
+            x, y, c = rotated_keypoints[j]
             if c < 0.3:
                 continue
-            x = int(x * frame_width)
-            y = int(y * frame_height) + y_offset
-            cv2.circle(canvas, (x, y), 4, color, -1)
+            px = int(x * canvas_w)
+            py = int(y * (canvas_h - 2 * PADDING)) + y_offset
+            cv2.circle(canvas, (px, py), 4, color, -1)
 
         for a, b in POSE_PAIRS:
-            x1, y1, c1 = rotated_kpts[a]
-            x2, y2, c2 = rotated_kpts[b]
+            x1, y1, c1 = rotated_keypoints[a]
+            x2, y2, c2 = rotated_keypoints[b]
             if c1 > 0.3 and c2 > 0.3:
-                x1 = int(x1 * frame_width)
-                y1 = int(y1 * frame_height) + y_offset
-                x2 = int(x2 * frame_width)
-                y2 = int(y2 * frame_height) + y_offset
+                x1 = int(x1 * canvas_w)
+                y1 = int(y1 * (canvas_h - 2 * PADDING)) + y_offset
+                x2 = int(x2 * canvas_w)
+                y2 = int(y2 * (canvas_h - 2 * PADDING)) + y_offset
                 cv2.line(canvas, (x1, y1), (x2, y2), color, 2)
 
-        if rotation == 90:
-            canvas = cv2.rotate(canvas, cv2.ROTATE_90_CLOCKWISE)
-        elif rotation == 180:
-            canvas = cv2.rotate(canvas, cv2.ROTATE_180)
-        elif rotation == 270:
-            canvas = cv2.rotate(canvas, cv2.ROTATE_90_COUNTERCLOCKWISE)
-
         out.write(canvas)
+        frame_written += 1
 
     cap.release()
     out.release()
-    print(f"🎬 시각화 저장 완료: {save_path} (fps: {fps})")
+    print(f"📼 임시 시각화 저장 완료: {temp_save_path} (fps: {fps}, frames_written: {frame_written})")
 
+    convert_video_with_ffmpeg(temp_save_path, save_path)
+
+    if os.path.exists(temp_save_path):
+        os.remove(temp_save_path)
 
 def summarize_top_joints(diff_seq, labels, top_k=2):
     joint_error_sum = np.zeros(17)

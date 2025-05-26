@@ -6,7 +6,10 @@ keypoint_dir = "Data/keypoints"
 base_output_dir = "Data/lstm_dataset"
 label_map = {"cranker": 0, "twohand": 1, "stroker": 2}
 
-# 키포인트 파일 반복
+reference_path = "Data/keypoints/twohand/twohand_001.npy"  # 기준 자세
+
+threshold = 0.08  # 🎯 평균 diff가 이 이상이면 '틀림'으로 간주
+
 for root, dirs, files in os.walk(keypoint_dir):
     for filename in files:
         print(f"처리 중: {filename}")
@@ -22,24 +25,21 @@ for root, dirs, files in os.walk(keypoint_dir):
         file_path = os.path.join(root, filename)
         output_dir = os.path.join(base_output_dir, label_name)
         os.makedirs(output_dir, exist_ok=True)
-        
+
         try:
-            #distance, ref, test, path = compare_poses(file_path, file_path)
-            reference_path = "Data/keypoints/twohand/twohand_001.npy"  # 기준자세 (twohand 중 하나)
-            test_path = file_path
-            distance, ref, test, path = compare_poses(reference_path, test_path)
+            distance, ref, test, path = compare_poses(reference_path, file_path)
             diff_seq = compute_diff_sequence(ref, test, path)
 
-            # 고쳐야 됨, 학습 데이터에 틀린거 없어서 임시방편.# 그 다음에 라벨 생성
-            if label_name == "twohand":
-                label_seq = np.zeros((diff_seq.shape[0], 1))  # 정상
-            else:
-                label_seq = np.ones((diff_seq.shape[0], 1))   # 틀린 동작
+            mean_diff = np.mean(np.abs(diff_seq))  # 🎯 전체 평균 차이
+            is_wrong = mean_diff >= threshold
+
+            label_seq = np.ones((diff_seq.shape[0], 1)) if is_wrong else np.zeros((diff_seq.shape[0], 1))
 
             base_name = filename.replace(".npy", "")
             np.save(os.path.join(output_dir, f"{base_name}_diff.npy"), diff_seq)
-            np.save(os.path.join(output_dir, f"{base_name}_label.npy"), label_seq) 
+            np.save(os.path.join(output_dir, f"{base_name}_label.npy"), label_seq)
 
-            print(f"✅ 저장됨: {label_name}/{base_name} (diff + label)")
+            print(f"✅ 저장됨: {label_name}/{base_name} (mean_diff={mean_diff:.4f}, label={'1' if is_wrong else '0'})")
+
         except Exception as e:
             print(f"⚠️ 실패: {filename} → {e}")
