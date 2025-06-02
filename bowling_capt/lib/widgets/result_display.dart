@@ -24,17 +24,35 @@ class ResultDisplay extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 🟡 점수
-                  Text(
-                    '정확도 점수: ${result.score.toStringAsFixed(1)}점',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Row(
+                    children: [
+                      Text(
+                        '정확도 점수: ${result.score.toStringAsFixed(1)}점',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 6),
+                      const Tooltip(
+                        message: 'AI가 올바르다고 판단한 프레임 비율입니다.\n높을수록 정확한 자세입니다.',
+                        child: Icon(Icons.help_outline, size: 18),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'DTW 점수: ${result.dtwScore.toStringAsFixed(2)}',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 20),
 
+                  // DTW 점수
+                  Row(
+                    children: [
+                      Text(
+                        'DTW 점수: ${result.dtwScore.toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      const SizedBox(width: 6),
+                      const Tooltip(
+                        message: '전문가 동작과의 유사도를 나타냅니다.\n낮을수록 더 비슷한 자세입니다.',
+                        child: Icon(Icons.help_outline, size: 18),
+                      ),
+                    ],
+                  ),
                   // 🔵 영상 (세로 비율 유지 + 높이 제한)
                   Center(
                     child: ConstrainedBox(

@@ -26,6 +26,14 @@ OUTPUT_FOLDER = 'outputs'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
+
+EXPECTED_LEN = {
+    "cranker": 365,
+    "twohand": 305,
+    "thumbless": 262,
+    "stroker": 300  #예상
+}
+
 @app.route('/extract_pose', methods=['POST'])
 def extract_pose():
     if 'video' not in request.files:
@@ -53,13 +61,15 @@ def extract_pose():
 })
 
 def predict_framewise_labels(diff_seq, model_path):
+    pitch_type = os.path.basename(model_path).replace("lstm_", "").replace(".h5", "")
+    maxlen = EXPECTED_LEN.get(pitch_type, 278)  # 기본값 278
+
     model = load_model(model_path)
-    padded = pad_sequences([diff_seq], padding='post', maxlen=278)
+    padded = pad_sequences([diff_seq], padding='post', maxlen=maxlen)
 
-    preds = model.predict(padded)  # shape: (1, T, 1) or (1, T)
-    framewise = np.squeeze(preds[0])  # ⚠️ 안전하게 squeeze
+    preds = model.predict(padded)  # shape: (1, T, 1)
+    framewise = np.squeeze(preds[0])
 
-    # 💡 단일 값으로 squeeze된 경우 대비
     if framewise.ndim == 0:
         framewise = np.array([framewise])
 
@@ -70,6 +80,8 @@ def predict_framewise_labels(diff_seq, model_path):
     print(f"🎯 labels 생성됨: {len(labels)}개, confidence: {confidence:.2f}")
 
     return labels, confidence
+
+
 
 @app.route('/analyze_pose', methods=['POST'])
 def analyze_pose():
