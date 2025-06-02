@@ -23,37 +23,25 @@ class ResultDisplay extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 🟡 점수
+                  // 🟡 점수 카드 2개 수평 정렬
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      Text(
-                        '정확도 점수: ${result.score.toStringAsFixed(1)}점',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      _buildScoreCard(
+                        label: '정확도',
+                        value: '${result.score.toStringAsFixed(1)}점',
+                        tooltip: 'AI가 올바르다고 판단한 프레임의 비율입니다.\n높을수록 더 정확한 자세입니다.',
                       ),
-                      const SizedBox(width: 6),
-                      const Tooltip(
-                        message: 'AI가 올바르다고 판단한 프레임 비율입니다.\n높을수록 정확한 자세입니다.',
-                        child: Icon(Icons.help_outline, size: 18),
+                      _buildScoreCard(
+                        label: 'DTW',
+                        value: result.dtwScore.toStringAsFixed(2),
+                        tooltip: '전문가의 자세와 비교한 유사도입니다.\n낮을수록 더 유사한 동작입니다.',
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 20),
 
-                  // DTW 점수
-                  Row(
-                    children: [
-                      Text(
-                        'DTW 점수: ${result.dtwScore.toStringAsFixed(2)}',
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                      const SizedBox(width: 6),
-                      const Tooltip(
-                        message: '전문가 동작과의 유사도를 나타냅니다.\n낮을수록 더 비슷한 자세입니다.',
-                        child: Icon(Icons.help_outline, size: 18),
-                      ),
-                    ],
-                  ),
-                  // 🔵 영상 (세로 비율 유지 + 높이 제한)
+                  // 🔵 비교 영상
                   Center(
                     child: ConstrainedBox(
                       constraints: BoxConstraints(
@@ -77,12 +65,45 @@ class ResultDisplay extends StatelessWidget {
                     result.feedback,
                     style: const TextStyle(fontSize: 16),
                   ),
-
-                  const SizedBox(height: 30), // 추가 공간 확보
+                  const SizedBox(height: 30),
                 ],
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScoreCard({
+    required String label,
+    required String value,
+    required String tooltip,
+  }) {
+    return Card(
+      color: Colors.grey[100],
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$label: $value',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Tooltip(
+              message: tooltip,
+              child: const Icon(Icons.help_outline, size: 16),
+            ),
+          ],
         ),
       ),
     );

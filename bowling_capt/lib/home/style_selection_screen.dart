@@ -15,7 +15,12 @@ class StyleSelectionScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final styles = ['스트로커', '투핸드', '덤리스', '크랭커'];
+    final styles = [
+      {'name': '스트로커', 'color': Colors.blue},
+      {'name': '투핸드','color': Colors.green},
+      {'name': '덤리스', 'color': Colors.orange},
+      {'name': '크랭커','color': Colors.red},
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -37,13 +42,33 @@ class StyleSelectionScreen extends StatelessWidget {
                 crossAxisCount: 2,
                 crossAxisSpacing: 20,
                 mainAxisSpacing: 20,
-                children: styles.map((style) {
-                  return ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.all(16),
+                children: styles.map((styleData) {
+                  final String name = styleData['name'] as String;
+                  final Color color = styleData['color'] as Color;
+
+                  return InkWell(
+                    onTap: () => _navigateToNext(context, name),
+                    child: Card(
+                      color: color.withOpacity(0.1),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 3,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const SizedBox(height: 12),
+                          Text(
+                            name,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    onPressed: () => _navigateToNext(context, style),
-                    child: Text(style, style: const TextStyle(fontSize: 18)),
                   );
                 }).toList(),
               ),
