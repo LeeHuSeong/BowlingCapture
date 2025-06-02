@@ -24,7 +24,7 @@ def save_augmented(diff_seq, is_wrong, base_name, output_dir, suffix):
 
 keypoint_dir = "Data/keypoints"
 base_output_dir = "Data/lstm_dataset"
-label_map = {"cranker": 0, "twohand": 1, "stroker": 2}
+label_map = {"cranker": 0, "twohand": 1, "stroker": 2, "thumbless":3}
 
 reference_path = "Data/keypoints/twohand/twohand_001.npy"  # 기준 자세
 
