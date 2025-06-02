@@ -4,10 +4,15 @@ import subprocess
 import os
 
 JOINT_FEEDBACK_MAP = {
+    0: "머리 위치가 흔들리고 있습니다.",
+    1: "왼쪽 어깨의 움직임을 안정시켜야 합니다.",
+    2: "오른쪽 어깨의 움직임을 안정시켜야 합니다.",
+    3: "왼쪽 팔꿈치를 더 고정할 필요가 있습니다.",
+    4: "오른쪽 팔꿈치를 더 고정할 필요가 있습니다.",
     5: "왼팔의 움직임이 불안정합니다.",
     6: "오른팔의 움직임이 불안정합니다.",
-    7: "왼쪽 팔꿈치를 더 고정할 필요가 있습니다.",
-    8: "오른쪽 팔꿈치를 더 고정할 필요가 있습니다.",
+    7: "왼쪽 손목이 많이 흔들립니다.",
+    8: "오른쪽 손목이 많이 흔들립니다.",
     9: "왼손의 흔들림이 큽니다.",
     10: "오른손의 흔들림이 큽니다.",
     11: "왼쪽 엉덩이의 움직임을 안정시켜야 합니다.",
@@ -36,7 +41,7 @@ def convert_video_with_ffmpeg(input_path, output_path):
 def rotate_keypoints_90ccw(keypoints):
     return [(y, x, c) for (x, y, c) in keypoints]
 
-def visualize_pose_feedback(ref, test, labels, save_path, source_video):
+def visualize_pose_feedback(ref, test, labels, diff_seq, top_joints, save_path, source_video):
     print(f"🔎 test length: {len(test)}, labels: {len(labels)}")
 
     cap = cv2.VideoCapture(source_video)
@@ -80,32 +85,47 @@ def visualize_pose_feedback(ref, test, labels, save_path, source_video):
         y_offset = PADDING
         canvas[y_offset:y_offset + frame_height, 0:frame_width] = frame
 
-        label = int(labels[i])
-        color = (0, 255, 0) if label == 0 else (0, 0, 255)
-
         canvas_h, canvas_w = canvas.shape[:2]
-
-        # ✅ keypoint 좌표 회전
         rotated_keypoints = rotate_keypoints_90ccw(test[i])
 
+        # 관절 차이 크기 계산
+        diffs = diff_seq[i].reshape(17, 2)
+        mags = np.linalg.norm(diffs, axis=1)
+        threshold = np.percentile(mags, 75)  # 상위 25% 이상한 관절
+
+        # 원 그리기 (정상/이상 공통 색: 초록)
         for j in range(17):
             x, y, c = rotated_keypoints[j]
             if c < 0.3:
                 continue
             px = int(x * canvas_w)
             py = int(y * (canvas_h - 2 * PADDING)) + y_offset
-            cv2.circle(canvas, (px, py), 4, color, -1)
+            cv2.circle(canvas, (px, py), 4, (0, 255, 0), -1)
+        
+        # LSTM에서 이상으로 판단된 프레임만 체크
+        is_wrong_frame = labels[i] == 1
 
+        # 선 그리기 (정상은 초록, 이상 관절끼리 연결된 선만 빨강)
         for a, b in POSE_PAIRS:
             x1, y1, c1 = rotated_keypoints[a]
             x2, y2, c2 = rotated_keypoints[b]
             if c1 > 0.3 and c2 > 0.3:
+                # 관절 a 또는 b가 threshold 이상이면 이상한 관절
+                # threshold 기준 완화 (0.1 이상인 경우만)
+                is_abnormal = (
+                    labels[i] == 1 and
+                    (a in top_joints or b in top_joints)
+                )
+                color = (0, 0, 255) if is_abnormal else (0, 255, 0)
+                thickness = 5 if is_abnormal else 2
+
                 x1 = int(x1 * canvas_w)
                 y1 = int(y1 * (canvas_h - 2 * PADDING)) + y_offset
                 x2 = int(x2 * canvas_w)
                 y2 = int(y2 * (canvas_h - 2 * PADDING)) + y_offset
-                cv2.line(canvas, (x1, y1), (x2, y2), color, 2)
-
+                cv2.line(canvas, (x1, y1), (x2, y2), color, thickness)
+            
+        print(f"프레임 {i} - 이상 관절:", [j for j in range(17) if mags[j] > threshold])
         out.write(canvas)
         frame_written += 1
 
@@ -118,11 +138,13 @@ def visualize_pose_feedback(ref, test, labels, save_path, source_video):
     if os.path.exists(temp_save_path):
         os.remove(temp_save_path)
 
-def summarize_top_joints(diff_seq, labels, top_k=2):
+
+def summarize_top_joints(diff_seq, labels, top_k=4):
     joint_error_sum = np.zeros(17)
     for i, label in enumerate(labels):
         if label == 1:
             diffs = diff_seq[i].reshape(17, 2)
             mags = np.linalg.norm(diffs, axis=1)
-            joint_error_sum += mags
-    return list(np.argsort(joint_error_sum)[-top_k:][::-1])
+            joint_error_sum += mags * (mags > 0.1)
+    sorted_indices = list(np.argsort(joint_error_sum)[::-1])
+    return [j for j in sorted_indices if joint_error_sum[j] > 0][:top_k]

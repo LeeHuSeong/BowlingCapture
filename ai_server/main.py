@@ -133,7 +133,8 @@ def analyze_pose():
         if not source_video or not os.path.exists(source_video):
             return jsonify({'error': '원본 trimmed 영상 경로 누락 또는 존재하지 않음'}), 400
 
-        visualize_pose_feedback(ref, test, labels, comparison_path, source_video=source_video)
+        top_joints = summarize_top_joints(diff_seq, labels, top_k=4)
+        visualize_pose_feedback(ref, test, labels, diff_seq, top_joints, comparison_path, source_video=source_video)
 
         
         # 정량적 기준 재조정
@@ -144,8 +145,18 @@ def analyze_pose():
         elif score >= 60:
             feedback_text = "전반적으로 양호하나 약간의 보완이 필요합니다."
         else:
-            top_joints = summarize_top_joints(diff_seq, labels, top_k=2)
-            feedback_text = " / ".join([JOINT_FEEDBACK_MAP.get(j, f"{j}번 관절 문제") for j in top_joints])
+            feedback_lines = []
+            for j in top_joints:
+                if j in JOINT_FEEDBACK_MAP:
+                    feedback_lines.append(JOINT_FEEDBACK_MAP[j])
+                else:
+                    continue  # 설명 없는 관절은 생략하거나 필요 시 매핑 추가
+
+            feedback_text = (
+                "💡 참고: 영상에서 '빨간 선'은 LSTM 모델이 이상하다고 판단한 프레임 중\n"
+                "'주요 관절'에 해당하는 부위를 강조한 것입니다.\n\n"
+                "다음 부위의 보완이 필요합니다:\n- " + "\n- ".join(feedback_lines)
+            )
 
         return jsonify({
             'feedback': feedback_text,
