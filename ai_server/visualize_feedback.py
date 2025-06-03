@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import subprocess
 import os
+from multiprocessing import Pool, cpu_count
 
 JOINT_FEEDBACK_MAP = {
     0: "머리 위치가 흔들리고 있습니다.",
@@ -41,6 +42,48 @@ def convert_video_with_ffmpeg(input_path, output_path):
 def rotate_keypoints_90ccw(keypoints):
     return [(y, x, c) for (x, y, c) in keypoints]
 
+def render_frame_for_visualization(args):
+    i, frame, rotated_keypoints, label, diff, top_joints, POSE_PAIRS, frame_height, frame_width, PADDING = args
+
+    canvas_height = frame_height + PADDING * 2
+    canvas_width = frame_width
+    canvas = np.full((canvas_height, canvas_width, 3), 255, dtype=np.uint8)
+    y_offset = PADDING
+    canvas[y_offset:y_offset + frame_height, 0:frame_width] = frame
+
+    canvas_h, canvas_w = canvas.shape[:2]
+
+    diffs = diff.reshape(17, 2)
+    mags = np.linalg.norm(diffs, axis=1)
+    threshold = np.percentile(mags, 75)
+
+    for j in range(17):
+        x, y, c = rotated_keypoints[j]
+        if c < 0.3:
+            continue
+        px = int(x * canvas_w)
+        py = int(y * (canvas_h - 2 * PADDING)) + y_offset
+        cv2.circle(canvas, (px, py), 4, (0, 255, 0), -1)
+
+    for a, b in POSE_PAIRS:
+        x1, y1, c1 = rotated_keypoints[a]
+        x2, y2, c2 = rotated_keypoints[b]
+        if c1 > 0.3 and c2 > 0.3:
+            is_abnormal = (
+                label == 1 and
+                (a in top_joints or b in top_joints)
+            )
+            color = (0, 0, 255) if is_abnormal else (0, 255, 0)
+            thickness = 5 if is_abnormal else 2
+            x1 = int(x1 * canvas_w)
+            y1 = int(y1 * (canvas_h - 2 * PADDING)) + y_offset
+            x2 = int(x2 * canvas_w)
+            y2 = int(y2 * (canvas_h - 2 * PADDING)) + y_offset
+            cv2.line(canvas, (x1, y1), (x2, y2), color, thickness)
+
+    print(f"프레임 {i} - 이상 관절:", [j for j in range(17) if mags[j] > threshold])
+    return canvas
+
 def visualize_pose_feedback(ref, test, labels, diff_seq, top_joints, save_path, source_video):
     print(f"🔎 test length: {len(test)}, labels: {len(labels)}")
 
@@ -73,71 +116,36 @@ def visualize_pose_feedback(ref, test, labels, diff_seq, top_joints, save_path, 
         (12, 14), (14, 16)
     ]
 
-    frame_written = 0
-
-    for i in range(min(len(test), len(labels))):
+    frames = []
+    for _ in range(min(len(test), len(labels))):
         ret, frame = cap.read()
         if not ret:
-            print(f"⚠️ 프레임 {i} 읽기 실패")
+            print(f"⚠️ 프레임 읽기 실패")
             break
-
-        canvas = np.full((canvas_height, canvas_width, 3), 255, dtype=np.uint8)
-        y_offset = PADDING
-        canvas[y_offset:y_offset + frame_height, 0:frame_width] = frame
-
-        canvas_h, canvas_w = canvas.shape[:2]
-        rotated_keypoints = rotate_keypoints_90ccw(test[i])
-
-        # 관절 차이 크기 계산
-        diffs = diff_seq[i].reshape(17, 2)
-        mags = np.linalg.norm(diffs, axis=1)
-        threshold = np.percentile(mags, 75)  # 상위 25% 이상한 관절
-
-        # 원 그리기 (정상/이상 공통 색: 초록)
-        for j in range(17):
-            x, y, c = rotated_keypoints[j]
-            if c < 0.3:
-                continue
-            px = int(x * canvas_w)
-            py = int(y * (canvas_h - 2 * PADDING)) + y_offset
-            cv2.circle(canvas, (px, py), 4, (0, 255, 0), -1)
-        
-        # LSTM에서 이상으로 판단된 프레임만 체크
-        is_wrong_frame = labels[i] == 1
-
-        # 선 그리기 (정상은 초록, 이상 관절끼리 연결된 선만 빨강)
-        for a, b in POSE_PAIRS:
-            x1, y1, c1 = rotated_keypoints[a]
-            x2, y2, c2 = rotated_keypoints[b]
-            if c1 > 0.3 and c2 > 0.3:
-                # 관절 a 또는 b가 threshold 이상이면 이상한 관절
-                # threshold 기준 완화 (0.1 이상인 경우만)
-                is_abnormal = (
-                    labels[i] == 1 and
-                    (a in top_joints or b in top_joints)
-                )
-                color = (0, 0, 255) if is_abnormal else (0, 255, 0)
-                thickness = 5 if is_abnormal else 2
-
-                x1 = int(x1 * canvas_w)
-                y1 = int(y1 * (canvas_h - 2 * PADDING)) + y_offset
-                x2 = int(x2 * canvas_w)
-                y2 = int(y2 * (canvas_h - 2 * PADDING)) + y_offset
-                cv2.line(canvas, (x1, y1), (x2, y2), color, thickness)
-            
-        print(f"프레임 {i} - 이상 관절:", [j for j in range(17) if mags[j] > threshold])
-        out.write(canvas)
-        frame_written += 1
-
+        frames.append(frame)
     cap.release()
-    out.release()
-    print(f"📼 임시 시각화 저장 완료: {temp_save_path} (fps: {fps}, frames_written: {frame_written})")
 
+    args_list = []
+    for i in range(len(frames)):
+        rotated_keypoints = rotate_keypoints_90ccw(test[i])
+        args_list.append((
+            i, frames[i], rotated_keypoints, labels[i], diff_seq[i],
+            top_joints, POSE_PAIRS, frame_height, frame_width, PADDING
+        ))
+
+    print("🚀 병렬 렌더링 시작...")
+    with Pool(processes=min(cpu_count(), 4)) as pool:
+        canvases = pool.map(render_frame_for_visualization, args_list)
+
+    for canvas in canvases:
+        out.write(canvas)
+    out.release()
+
+    print(f"📼 임시 시각화 저장 완료: {temp_save_path} (fps: {fps}, frames_written: {len(canvases)})")
     convert_video_with_ffmpeg(temp_save_path, save_path)
 
     if os.path.exists(temp_save_path):
         os.remove(temp_save_path)
-
 
 def summarize_top_joints(diff_seq, labels, top_k=4):
     joint_error_sum = np.zeros(17)

@@ -10,7 +10,7 @@ import subprocess
 import json
 from flask import Flask, request, jsonify, send_from_directory
 from flask import send_file
-from tensorflow.keras.models import load_model  
+from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 # 사용자 정의 모듈
