@@ -94,90 +94,85 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('영상 구간 선택')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            AspectRatio(
-              aspectRatio: _controller.value.aspectRatio,
-              child: VideoPlayer(_controller),
-            ),
-            const SizedBox(height: 8),
-            IconButton(
-              icon: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
-              onPressed: _togglePlayPause,
-            ),
-
-            Text(
-              '현재 위치: ${_controller.value.position.inSeconds.toDouble().toStringAsFixed(1)}초 / '
-              '선택 구간: ${_start.toStringAsFixed(1)} ~ ${_end.toStringAsFixed(1)}초 '
-              '(${duration.toStringAsFixed(1)}초)',
-              style: const TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 12),
-
-            RangeSlider(
-              min: 0,
-              max: _max,
-              divisions: _max.toInt(),
-              values: RangeValues(_start, _end),
-              labels: RangeLabels(
-                _start.toStringAsFixed(1),
-                _end.toStringAsFixed(1),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: FittedBox(
+                  fit: BoxFit.contain,
+                  child: SizedBox(
+                    width: _controller.value.size.width,
+                    height: _controller.value.size.height,
+                    child: VideoPlayer(_controller),
+                  ),
+                ),
               ),
-              onChanged: (values) {
-                double start = values.start;
-                double end = values.end;
-
-                // 자동 보정
-                if (end - start > 8.0) {
-                  end = start + 8.0;
-                } else if (end - start < 3.0) {
-                  end = start + 3.0;
-                }
-
-                // 영상 길이 초과 방지
-                if (end > _max) {
-                  end = _max;
-                  start = end - 8.0;
-                  if (start < 0) start = 0;
-                }
-
-                setState(() {
-                  _start = start;
-                  _end = end;
-                  _controller.seekTo(Duration(seconds: _start.toInt()));
-                });
-
-                _generateThumbnail();
-              },
-            ),
-
-            if (_thumbnailPath != null) ...[
-              const SizedBox(height: 12),
-              const Text("시작 구간 썸네일 미리보기", style: TextStyle(fontSize: 14)),
-              const SizedBox(height: 6),
-              Image.file(File(_thumbnailPath!), height: 100),
-            ],
-
-            const SizedBox(height: 16),
-            if (!isValidDuration)
+              const SizedBox(height: 8),
+              IconButton(
+                icon: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
+                onPressed: _togglePlayPause,
+              ),
               Text(
-                '구간 길이는 3초 이상, 8초 이하여야 합니다.',
-                style: const TextStyle(color: Colors.red, fontSize: 13),
+                '현재 위치: ${_controller.value.position.inSeconds.toDouble().toStringAsFixed(1)}초 / '
+                '선택 구간: ${_start.toStringAsFixed(1)} ~ ${_end.toStringAsFixed(1)}초 '
+                '(${duration.toStringAsFixed(1)}초)',
+                style: const TextStyle(fontSize: 14),
               ),
+              const SizedBox(height: 12),
+              RangeSlider(
+                min: 0,
+                max: _max,
+                divisions: _max.toInt(),
+                values: RangeValues(_start, _end),
+                labels: RangeLabels(
+                  _start.toStringAsFixed(1),
+                  _end.toStringAsFixed(1),
+                ),
+                onChanged: (values) {
+                  double start = values.start;
+                  double end = values.end;
 
-            ElevatedButton(
-              onPressed: isValidDuration ? _proceed : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isValidDuration ? Colors.blue : Colors.grey,
-                minimumSize: const Size.fromHeight(48),
+                  if (end - start > 8.0) {
+                    end = start + 8.0;
+                  } else if (end - start < 3.0) {
+                    end = start + 3.0;
+                  }
+
+                  if (end > _max) {
+                    end = _max;
+                    start = end - 8.0;
+                    if (start < 0) start = 0;
+                  }
+
+                  setState(() {
+                    _start = start;
+                    _end = end;
+                    _controller.seekTo(Duration(seconds: _start.toInt()));
+                  });
+                },
               ),
-              child: const Text("선택한 구간 업로드"),
-            ),
-          ],
+              const SizedBox(height: 16),
+              if (!isValidDuration)
+                const Text(
+                  '구간 길이는 3초 이상, 8초 이하여야 합니다.',
+                  style: TextStyle(color: Colors.red, fontSize: 13),
+                ),
+              ElevatedButton(
+                onPressed: isValidDuration ? _proceed : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isValidDuration ? Colors.blue : Colors.grey,
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                child: const Text("선택한 구간 업로드"),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+
 }
