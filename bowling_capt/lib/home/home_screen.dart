@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../services/video_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/result_display.dart';
 import '../models/analysis_result.dart';
 import 'package:http/http.dart' as http;
+import '../db/result_dao.dart';
 
 class HomeScreen extends StatefulWidget {
   final String style;
@@ -45,6 +46,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final path = widget.editedVideoPath;
 
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getInt('user_id');
+      if (userId == null) throw Exception('로그인된 사용자 없음');
+
       final uri = Uri.parse('http://10.0.2.2:5000/extract_pose');
       final request = http.MultipartRequest('POST', uri);
       request.files.add(await http.MultipartFile.fromPath('video', path));
@@ -81,9 +86,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final json = jsonDecode(analyzeResponse.body);
 
+      final result = AnalysisResult.fromJson(
+        json,
+        userId: userId,
+        videoPath: '', // 또는 null → 우리는 서버 URL만 쓸 거니까!
+        pitchType: widget.style,
+        timestamp: DateTime.now().toIso8601String(),
+      );
+
+      await ResultDao.insertResult(result); // ⬅️ 결과 DB 저장
+
       if (!mounted) return;
       setState(() {
-        _result = AnalysisResult.fromJson(json).copyWith(videoPath: path);
+        _result = result;
         _isProcessing = false;
       });
 

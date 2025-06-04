@@ -1,0 +1,2 @@
+C:/Users/admin/Desktop/BowlingCapture/bowling_capt/android/app/.cxx/Debug/2p1x2yn2/x86_64/CMakeFiles/edit_cache.dir
+C:/Users/admin/Desktop/BowlingCapture/bowling_capt/android/app/.cxx/Debug/2p1x2yn2/x86_64/CMakeFiles/rebuild_cache.dir

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/analysis_result.dart';
 import 'comparison_video_player.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../db/result_dao.dart';
+import 'package:flutter/services.dart';
 
 class ResultDisplay extends StatelessWidget {
   final AnalysisResult result;
@@ -10,9 +13,46 @@ class ResultDisplay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final serverIp = "http://10.0.2.2:5000";
-    final videoUrl = "$serverIp/video/${result.comparisonVideoFileName}";
+    final isOnlineVideo = result.comparisonVideoFileName.isNotEmpty;
+    final videoUrl = isOnlineVideo
+        ? "$serverIp/video/${result.comparisonVideoFileName}"
+        : result.videoPath;
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('분석 결과'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete),
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('삭제 확인'),
+                  content: const Text('이 분석 결과를 삭제하시겠습니까?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('취소'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('삭제'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirm == true) {
+                await ResultDao.deleteResult(result.id!);
+                if (context.mounted) {
+                  Navigator.pop(context); // 결과 화면 닫기
+                }
+              }
+            },
+          ),
+        ],
+      ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -55,6 +95,13 @@ class ResultDisplay extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
 
+                  // 📅 분석 날짜
+                  Text(
+                    '분석 날짜: ${result.timestamp.substring(0, 10)}',
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 12),
+
                   // 🔴 피드백
                   const Text(
                     '피드백:',
@@ -65,7 +112,18 @@ class ResultDisplay extends StatelessWidget {
                     result.feedback,
                     style: const TextStyle(fontSize: 16),
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 24),
+
+                  // 🏠 홈으로 돌아가기
+                  Center(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.home),
+                      label: const Text('홈으로'),
+                      onPressed: () {
+                        Navigator.popUntil(context, (route) => route.isFirst);
+                      },
+                    ),
+                  ),
                 ],
               ),
             );
