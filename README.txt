@@ -11,6 +11,10 @@ How to Play
   3-1. Run bowling_capt/lib/main.py
 
 If you have an emulator(SDK35), launch it by pressing Ctrl + Shift + P, then run step 3 again.
+
+
+You can watch the demo video of Bowling_Capture on YouTube : 
+https://youtu.be/MzG0xD05jds?si=ju8ntEjJFlguOmjn
 =====================
 
 1. Visual Studio Code창 2개 실행
@@ -20,3 +24,6 @@ If you have an emulator(SDK35), launch it by pressing Ctrl + Shift + P, then run
 3-1. bowling_capt/lib/main.py 실행
 
 에뮬레이터(SDK35)가 있다면, ctrl + shift + p로 에뮬레이터 실행 후, 3번 다시 실행. 
+
+실행영상입니다.
+(https://youtu.be/MzG0xD05jds?si=ju8ntEjJFlguOmjn)
